@@ -1,0 +1,103 @@
+D-ISLAND LICENSE
+Version 1.0
+
+Copyright (c) 2026 h7 (ibuildrigs). All rights not expressly granted in this license are reserved.
+https://github.com/H7gamer/d-island - https://ibuildrigs.com
+
+This license applies to D-Island version 1.1.0 and later ("the Software"), including its source code, documentation and installer. Earlier versions were released under the Apache License 2.0, and copies of those versions remain available under that license.
+
+In short: you may use, study, modify and share D-Island, including commercially, as long as you credit the author visibly, keep users informed and in control of their data, and never use it to harm or deceive people. The full terms follow.
+
+
+1. DEFINITIONS
+
+"Licensor" means h7 (ibuildrigs), the copyright holder.
+"You" means the person or organisation exercising rights under this license.
+"Distribute" means to make the Software or a Modified Version available to anyone else, in source or compiled form, by any means, including online services that let others download it.
+"Modified Version" means any work that contains, modifies or is derived from the Software or a substantial part of it.
+
+
+2. PERMISSIONS
+
+Subject to the conditions in sections 3 and 4, the Licensor grants You a worldwide, royalty-free, non-exclusive license to:
+a) use the Software for any lawful purpose, personal or commercial;
+b) read, study and modify its source code;
+c) Distribute the Software and Modified Versions, free of charge or for a fee.
+
+
+3. CONDITIONS FOR DISTRIBUTION
+
+If You Distribute the Software or a Modified Version, You must:
+
+a) Credit the author visibly. Show the following text where users can see it while using the software, at least in its About, credits or settings screen (and, for software without such a screen, in its README and on every download page):
+
+    Based on D-Island by h7 (ibuildrigs) - https://github.com/H7gamer/d-island
+
+   The credit must be readable, and must not be hidden, removed, shortened or made misleading.
+
+b) Include this license (LICENSE.txt), NOTICE.txt and THIRD-PARTY-NOTICES.txt, and keep all copyright notices in the source files.
+
+c) For a Modified Version: state clearly that it has been modified and by whom, that it is not an official D-Island release, and give it a name and icon that are clearly different from D-Island's.
+
+d) Include an accurate privacy statement for what You Distribute (You may adapt PRIVACY.txt). If Your version collects, stores or sends any information that the official version does not, describe it there and obtain users' informed consent before doing so.
+
+
+4. PROHIBITED USES
+
+Whether or not You Distribute it, You must not use the Software, a Modified Version or any part of its code to:
+
+a) create, distribute or disguise malware, spyware, stalkerware or adware, or any software that installs, runs, hides, persists or collects information without the informed consent of the person using the computer;
+
+b) monitor, record, collect or transmit anyone's notifications, messages, clipboard contents, keystrokes, calendar, location, audio, screen contents, files or other personal information without their knowledge and consent;
+
+c) disable, bypass or hide consent and privacy protections of Windows or of the Software, including permission prompts, the microphone and camera indicator, and the handling of content that password managers mark as private;
+
+d) impersonate the Licensor, the Software, an official D-Island release, or any other person, company or product;
+
+e) break any law that applies to You.
+
+
+5. NAMES AND TRADEMARKS
+
+This license does not grant any right to use the names "D-Island", "h7" or "ibuildrigs", or the D-Island icon, except to give the credit required by section 3(a) and to describe the origin of the work truthfully.
+
+
+6. CONTRIBUTIONS
+
+Contributions submitted to the official repository are accepted only under the D-Island Contributor License Agreement (CLA.md). It lets the Licensor include contributions in the Software and license them under this or other terms, while contributors keep their copyright.
+
+
+7. PATENTS
+
+Each contributor grants You a royalty-free, worldwide patent license, for its contributions as included in the Software, to make, use, sell and Distribute them as permitted by this license. This patent license ends for You if You start patent litigation claiming that the Software infringes a patent.
+
+
+8. TERMINATION
+
+Your rights under this license end automatically if You break any of its terms.
+
+If it is Your first breach of section 3 and You fix it within 30 days of becoming aware of it, Your rights are restored. Rights ended for a breach of section 4 are not restored.
+
+When Your rights end, You must stop using and Distributing the Software and Modified Versions. People who received copies from You keep their own rights as long as they comply with this license.
+
+
+9. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. Some features rely on undocumented or unofficial Windows and third-party interfaces (for example the GPU blur, Do Not Disturb detection and Apple Music motion artwork) that may stop working at any time. Using third-party services through the Software is subject to those services' own terms.
+
+
+10. LIMITATION OF LIABILITY
+
+TO THE EXTENT PERMITTED BY LAW, IN NO EVENT SHALL THE LICENSOR OR ANY CONTRIBUTOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+
+11. OFFICIAL RELEASES
+
+Official releases come only from https://github.com/H7gamer/d-island (GitHub Releases) and https://ibuildrigs.com. Copies from anywhere else are not authorised, checked or supported by the Licensor; anyone who installs them does so at their own risk.
+
+
+12. GENERAL
+
+If any part of this license is held unenforceable, the rest remains in effect. The Licensor may publish new versions of this license; each version of the Software is covered by the license included with it.
+
+Contact: https://ibuildrigs.com

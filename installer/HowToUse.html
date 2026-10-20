@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How to use D-Island</title>
+<style>
+  :root {
+    --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --line: #e3e3e8;
+    --accent: #30d158; --kbd: #ececf0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111113; --card: #1c1c1e; --text: #f5f5f7; --muted: #a1a1a6; --line: #2c2c2e; --kbd: #2c2c2e; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 20px 64px; background: var(--bg); color: var(--text);
+    font: 16px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  .pill {
+    width: 128px; height: 40px; margin: 0 auto 28px; border-radius: 20px; background: #121214;
+    position: relative; box-shadow: 0 6px 24px rgba(0,0,0,.25);
+  }
+  .pill::after {
+    content: ""; position: absolute; right: 16px; top: 15px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--accent);
+  }
+  h1 { font-size: 34px; line-height: 1.15; margin: 0 0 8px; text-align: center; letter-spacing: -0.02em; }
+  .lede { text-align: center; color: var(--muted); margin: 0 auto 40px; max-width: 560px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 26px; margin: 0 0 16px; }
+  h2 { font-size: 19px; margin: 0 0 10px; }
+  p { margin: 0 0 10px; }
+  ul { margin: 0; padding-left: 20px; }
+  li { margin: 6px 0; }
+  kbd {
+    font: 600 13px/1 "Segoe UI", system-ui, sans-serif; background: var(--kbd); border: 1px solid var(--line);
+    border-bottom-width: 2px; border-radius: 6px; padding: 3px 7px; white-space: nowrap;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 6px; }
+  .page { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .page b { display: block; margin-bottom: 2px; }
+  .page span { color: var(--muted); font-size: 14.5px; }
+  .muted { color: var(--muted); font-size: 14.5px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="pill" aria-hidden="true"></div>
+  <h1>How to use D-Island</h1>
+  <p class="lede">A Dynamic Island for Windows. It sits at the top centre of your screen and shows what's going on: the time and weather when nothing is, and your music, timers and alerts when something is.</p>
+
+  <section>
+    <h2>Open and close it</h2>
+    <ul>
+      <li><b>Hover</b> over the island, or <b>click</b> it, to open it. Move the pointer away to close it.</li>
+      <li><b>Right-click</b> the island to open Settings. You can also double-click the D-Island icon in the taskbar's notification area, or use <b>D-Island Settings</b> in the Start menu.</li>
+      <li>Press <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>I</kbd> to hide or show the island from anywhere.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Pages</h2>
+    <p>Scroll with the mouse wheel or touchpad over the open island, or click the icons along its top, to switch pages. Scrolling a long list stops at its end; scroll again to move on.</p>
+    <div class="grid">
+      <div class="page"><b>Home</b><span>What's playing (Spotify, Apple Music, browsers and more), quick timers and a stopwatch.</span></div>
+      <div class="page"><b>Notifications</b><span>Other apps' notifications. Click one to open its app, ✕ to dismiss it.</span></div>
+      <div class="page"><b>Calendar</b><span>This month and your next events, with a Join button for Teams, Zoom, Meet and Webex.</span></div>
+      <div class="page"><b>Shelf</b><span>Drag files onto the island to keep them handy, then drag them out wherever you need them.</span></div>
+      <div class="page"><b>Weather</b><span>Now, the next hours and the next five days.</span></div>
+      <div class="page"><b>Apps</b><span>Your favourite apps, one click away. Choose them in Settings.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Alerts</h2>
+    <p>The island briefly shows volume and brightness, battery and charging, devices connecting (with earbud battery), Caps Lock, copied text, Do Not Disturb, Wi-Fi and more.</p>
+    <ul>
+      <li>An <b>orange</b> or <b>green</b> dot beside the island means an app is using your microphone or camera.</li>
+      <li>When two things run at once, for example a timer and music, the second appears as a small <b>bubble</b> beside the island.</li>
+      <li>Hover or click while an alert is showing to open its page.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Notifications and your Windows calendar</h2>
+    <p>Windows only shares these with apps that complete a one-time setup. Choose it while installing, or later in <b>Settings &gt; Notifications</b>. Windows asks for permission once.</p>
+    <p class="muted">Calendars from Google, Outlook or iCloud can also be added as a link in <b>Settings &gt; Calendar</b>, with no setup.</p>
+  </section>
+
+  <section>
+    <h2>Make it yours</h2>
+    <p>Settings has the shape (island or notch), the material (including Liquid Glass), size, colours, fonts, alarms, and which alerts and pages to show. Everything applies straight away.</p>
+  </section>
+
+  <p class="muted" style="text-align:center; margin-top:28px">
+    Built by <b>h7</b> · <a href="https://ibuildrigs.com" style="color:inherit">ibuildrigs.com</a><br>
+    © 2026 h7 (ibuildrigs). Licensed under the <a href="LICENSE.txt" style="color:inherit">D-Island License 1.0</a>.
+    Official releases come only from <a href="https://github.com/H7gamer/d-island" style="color:inherit">github.com/H7gamer/d-island</a>
+    and ibuildrigs.com (<a href="NOTICE.txt" style="color:inherit">notice</a>, <a href="PRIVACY.txt" style="color:inherit">privacy</a>).
+  </p>
+</main>
+</body>
+</html>

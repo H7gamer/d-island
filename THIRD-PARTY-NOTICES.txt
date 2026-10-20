@@ -1,0 +1,65 @@
+D-ISLAND THIRD-PARTY NOTICES
+
+D-Island, Copyright 2026 h7 (ibuildrigs), is licensed under the D-Island License 1.0; see LICENSE.txt and
+NOTICE.txt.
+
+D-Island includes the following open-source components. Each is licensed under its own terms, reproduced
+or referenced below.
+
+----------------------------------------------------------------------------------------------------
+.NET runtime and Windows Desktop runtime (WPF, Windows Forms)      MIT License
+Copyright (c) .NET Foundation and Contributors              https://github.com/dotnet/runtime
+                                                            https://github.com/dotnet/wpf
+C#/WinRT (WinRT.Runtime)                                    MIT License
+Copyright (c) Microsoft Corporation                         https://github.com/microsoft/CsWinRT
+MsQuic (msquic.dll)                                         MIT License
+Copyright (c) Microsoft Corporation                         https://github.com/microsoft/msquic
+System.Management                                           MIT License
+Copyright (c) .NET Foundation and Contributors              https://github.com/dotnet/runtime
+
+Ical.Net 4.3.1                                              MIT License
+Copyright (c) Rian Stockbower and contributors              https://github.com/rianjs/ical.net
+
+Vortice.Windows 3.6.2 (DirectComposition, DXGI, Direct2D1, DirectX, Mathematics)   MIT License
+Copyright (c) Amer Koleci and contributors                  https://github.com/amerkoleci/Vortice.Windows
+
+SharpGen.Runtime / SharpGen.Runtime.COM 2.2.0               MIT License
+Copyright (c) Andrew Kolos and contributors                 https://github.com/SharpGenTools/SharpGenTools
+
+MIT License
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+----------------------------------------------------------------------------------------------------
+NodaTime 3.2.0                                              Apache License 2.0
+Copyright (c) Jon Skeet and contributors                    https://github.com/nodatime/nodatime
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+compliance with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is
+distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and limitations under the License.
+NodaTime is distributed unmodified.
+
+----------------------------------------------------------------------------------------------------
+Installer
+The D-Island installer is built with Inno Setup (c) Jordan Russell and Martijn Laan,
+https://jrsoftware.org/isinfo.php, used under the Inno Setup licence.
+
+Online services used at run time (weather by Open-Meteo, https://open-meteo.com, CC BY 4.0 data;
+Apple and calendar providers) are described in PRIVACY.txt.

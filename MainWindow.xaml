@@ -1,0 +1,599 @@
+<!-- D-Island - Copyright 2026 h7 (ibuildrigs) and contributors.
+     Licensed under the D-Island License 1.0; see LICENSE.txt and NOTICE.txt. -->
+<Window x:Class="DIsland.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="D-Island"
+        Width="460" Height="300"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False"
+        ResizeMode="NoResize" Focusable="False"
+        FontFamily="Segoe UI Variable Text, Segoe UI" Foreground="White"
+        TextOptions.TextRenderingMode="Grayscale">
+
+    <Window.Resources>
+        <!-- Every view sits where the pill's top edge is; the pill's clip reveals it as the pill grows. -->
+        <Style x:Key="IslandView" TargetType="Grid">
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+        </Style>
+        <SolidColorBrush x:Key="Orange" Color="#FFFF9F0A" />
+        <SolidColorBrush x:Key="Green" Color="#FF30D158" />
+        <SolidColorBrush x:Key="Cyan" Color="#FF64D2FF" />
+        <SolidColorBrush x:Key="Secondary" Color="#99FFFFFF" />
+        <SolidColorBrush x:Key="ArtPlaceholder" Color="#FF2C2C2E" />
+
+        <!-- Thin, rounded, translucent scroll bar for pages that can outgrow the island. -->
+        <Style x:Key="SlimScrollThumb" TargetType="Thumb">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border CornerRadius="2" Background="#55FFFFFF" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SlimScroll" TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid>
+                            <ScrollContentPresenter CanContentScroll="{TemplateBinding CanContentScroll}" />
+                            <ScrollBar x:Name="PART_VerticalScrollBar" HorizontalAlignment="Right" Width="4"
+                                       Margin="0,2,-10,2" Orientation="Vertical"
+                                       Value="{TemplateBinding VerticalOffset}" Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}">
+                                <ScrollBar.Template>
+                                    <ControlTemplate TargetType="ScrollBar">
+                                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                            <Track.Thumb>
+                                                <Thumb Style="{StaticResource SlimScrollThumb}" />
+                                            </Track.Thumb>
+                                        </Track>
+                                    </ControlTemplate>
+                                </ScrollBar.Template>
+                            </ScrollBar>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Root has no background: only the pill and its content are hit-testable, the rest clicks through. -->
+    <!-- Fixed design size; the "Size" setting scales it with a LayoutTransform and resizes the window. -->
+    <Grid x:Name="Root" Width="460" Height="300" HorizontalAlignment="Left" VerticalAlignment="Top">
+        <!-- Liquid Glass: a live, blurred copy of the screen behind the island, clipped to its shape. -->
+        <Canvas x:Name="GlassLayer" IsHitTestVisible="False" Visibility="Collapsed">
+            <Image x:Name="GlassImage" Stretch="Fill" RenderOptions.BitmapScalingMode="Linear">
+                <Image.Effect>
+                    <BlurEffect Radius="14" KernelType="Gaussian" RenderingBias="Performance" />
+                </Image.Effect>
+            </Image>
+        </Canvas>
+
+        <!-- Geometry is rebuilt every animation frame (rounded pill or notch with shoulders). -->
+        <Path x:Name="PillShape" Fill="Black" />
+        <!-- Liquid Glass: soft top highlight; brush is built in code from the Shininess setting. -->
+        <Path x:Name="GlassSheen" IsHitTestVisible="False" Visibility="Collapsed" />
+
+        <Grid x:Name="ContentLayer">
+
+            <!-- Clock (idle) -->
+            <Grid x:Name="ClockView" Style="{StaticResource IslandView}" Width="150" Height="34">
+                <StackPanel x:Name="ClockRow" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock x:Name="ClockText" VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold" />
+                    <!-- Optional weather: "| icon 26°" (UpdateClock). -->
+                    <StackPanel x:Name="ClockWeather" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Text="|" FontSize="14" Margin="9,0,9,1" VerticalAlignment="Center"
+                                   Foreground="{StaticResource Secondary}" />
+                        <Border x:Name="ClockWeatherIcon" Width="18" Height="18" VerticalAlignment="Center" />
+                        <TextBlock x:Name="ClockWeatherTemp" FontSize="14" FontWeight="SemiBold" Margin="5,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
+            <!-- Media (compact) -->
+            <Grid x:Name="MediaView" Style="{StaticResource IslandView}" Width="300" Height="36">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="MediaArtSmall" Width="24" Height="24" Margin="7,0,0,0" CornerRadius="6"
+                        Background="{StaticResource ArtPlaceholder}">
+                    <TextBlock x:Name="MediaArtSmallFallback" Style="{StaticResource Glyph}" Text="&#xE8D6;"
+                               FontSize="11" Foreground="{StaticResource Secondary}" />
+                </Border>
+                <TextBlock x:Name="MediaTitleSmall" Grid.Column="1" Margin="10,0" VerticalAlignment="Center"
+                           FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <StackPanel x:Name="Equalizer" Grid.Column="2" Orientation="Horizontal"
+                            VerticalAlignment="Center" Margin="0,0,14,0">
+                    <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Margin="1,0" Fill="{StaticResource Green}" />
+                    <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Margin="1,0" Fill="{StaticResource Green}" />
+                    <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Margin="1,0" Fill="{StaticResource Green}" />
+                    <Rectangle Width="3" Height="14" RadiusX="1.5" RadiusY="1.5" Margin="1,0" Fill="{StaticResource Green}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Timer (compact) -->
+            <Grid x:Name="TimerView" Style="{StaticResource IslandView}" Width="210" Height="36">
+                <Grid Margin="16,0">
+                    <TextBlock Style="{StaticResource Glyph}" HorizontalAlignment="Left" Text="&#xE916;"
+                               FontSize="15" Foreground="{StaticResource Orange}" />
+                    <TextBlock x:Name="TimerTextSmall" HorizontalAlignment="Right" VerticalAlignment="Center"
+                               FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Orange}"
+                               Typography.NumeralAlignment="Tabular" />
+                </Grid>
+            </Grid>
+
+            <!-- Stopwatch (compact) -->
+            <Grid x:Name="StopwatchView" Style="{StaticResource IslandView}" Width="210" Height="36">
+                <Grid Margin="16,0">
+                    <TextBlock Style="{StaticResource Glyph}" HorizontalAlignment="Left" Text="&#xE916;"
+                               FontSize="15" Foreground="{StaticResource Cyan}" />
+                    <TextBlock x:Name="StopwatchTextSmall" HorizontalAlignment="Right" VerticalAlignment="Center"
+                               FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Cyan}"
+                               Typography.NumeralAlignment="Tabular" />
+                </Grid>
+            </Grid>
+
+            <!-- Volume / brightness OSD -->
+            <Grid x:Name="OsdView" Style="{StaticResource IslandView}" Width="320" Height="44">
+                <Grid Margin="18,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="40" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="OsdIcon" Style="{StaticResource Glyph}" HorizontalAlignment="Left"
+                               FontSize="16" Text="&#xE767;" />
+                    <Border Grid.Column="1" Height="6" Margin="8,0" CornerRadius="3" Background="#33FFFFFF"
+                            VerticalAlignment="Center" ClipToBounds="True">
+                        <Border x:Name="OsdFill" CornerRadius="3" Background="White" RenderTransformOrigin="0,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="0" />
+                            </Border.RenderTransform>
+                        </Border>
+                    </Border>
+                    <TextBlock x:Name="OsdPercent" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center"
+                               FontSize="13" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" />
+                </Grid>
+            </Grid>
+
+            <!-- Battery / charging -->
+            <Grid x:Name="BatteryView" Style="{StaticResource IslandView}" Width="320" Height="44">
+                <Grid Margin="18,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <TextBlock x:Name="BatteryBolt" Style="{StaticResource Glyph}" Text="&#xE945;" FontSize="14"
+                                   Margin="0,0,8,0" Foreground="{StaticResource Green}" />
+                        <TextBlock x:Name="BatteryTitle" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock x:Name="BatteryPercent" FontSize="13" FontWeight="SemiBold" Margin="0,0,8,0"
+                                   VerticalAlignment="Center" Typography.NumeralAlignment="Tabular" />
+                        <Grid Width="30" Height="14" VerticalAlignment="Center">
+                            <Border Width="27" HorizontalAlignment="Left" BorderBrush="#80FFFFFF"
+                                    BorderThickness="1.2" CornerRadius="4" />
+                            <Border x:Name="BatteryFill" HorizontalAlignment="Left" Margin="2.5,2.5,0,2.5"
+                                    Width="11" CornerRadius="2" Background="{StaticResource Green}" />
+                            <Border HorizontalAlignment="Right" Width="2" Height="5" CornerRadius="0,1,1,0"
+                                    Background="#80FFFFFF" />
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <!-- Short info alerts: device connected, Caps Lock, Do Not Disturb, copied / pasted.
+                 Width is set per alert (ShowInfo). -->
+            <Grid x:Name="InfoView" Style="{StaticResource IslandView}" Width="340" Height="44">
+                <Grid Margin="18,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="InfoGlyph" Style="{StaticResource Glyph}" Text="&#xE772;" FontSize="16" />
+                    <TextBlock x:Name="InfoTitle" Grid.Column="1" Margin="10,0" FontSize="13" FontWeight="SemiBold"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="InfoDetail" Grid.Column="2" FontSize="12" VerticalAlignment="Center"
+                               MaxWidth="190" TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </Grid>
+
+            <!-- Another app's notification (icon, title, text, app). -->
+            <Grid x:Name="NotificationView" Style="{StaticResource IslandView}" Width="370" Height="58">
+                <Grid Margin="13,0,18,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="NotifIcon" Width="32" Height="32" CornerRadius="8" VerticalAlignment="Center"
+                            Background="{StaticResource ArtPlaceholder}" />
+                    <StackPanel Grid.Column="1" Margin="11,0,8,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="NotifTitle" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="NotifBody" FontSize="12" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"
+                                   Foreground="{StaticResource Secondary}" />
+                    </StackPanel>
+                    <TextBlock x:Name="NotifApp" Grid.Column="2" FontSize="11" MaxWidth="90" Margin="0,11,0,0"
+                               VerticalAlignment="Top" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Secondary}" />
+                </Grid>
+            </Grid>
+
+            <!-- Timer finished alert -->
+            <Grid x:Name="TimerDoneView" Style="{StaticResource IslandView}" Width="320" Height="44">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock x:Name="TimerDoneGlyph" Style="{StaticResource Glyph}" Text="&#xE916;" FontSize="15"
+                               Margin="0,0,10,0" Foreground="{StaticResource Orange}" />
+                    <TextBlock x:Name="TimerDoneText" Text="Timer finished" FontSize="14" FontWeight="SemiBold"
+                               VerticalAlignment="Center" MaxWidth="240" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Expanded -->
+            <Grid x:Name="ExpandedView" Style="{StaticResource IslandView}" Width="420">
+                <!-- Album art banner behind the media section, fading into the island. Brush set in code.
+                     MotionBanner plays Apple Music motion artwork over it when available. -->
+                <Border x:Name="ArtBanner" VerticalAlignment="Top" Height="160" Opacity="0.55"
+                        Visibility="Collapsed" IsHitTestVisible="False" ClipToBounds="True">
+                    <Border.OpacityMask>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#FF000000" Offset="0" />
+                            <GradientStop Color="#80000000" Offset="0.5" />
+                            <GradientStop Color="#00000000" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.OpacityMask>
+                    <MediaElement x:Name="MotionBanner" Stretch="UniformToFill" IsMuted="True" Volume="0"
+                                  LoadedBehavior="Manual" UnloadedBehavior="Manual" ScrubbingEnabled="False"
+                                  Visibility="Collapsed" />
+                </Border>
+                <StackPanel x:Name="ExpandedContent" Margin="18,12,18,14">
+
+                    <!-- Page navigation (tabs or dots, built in code); mic/camera chip on the right, left of the gear. -->
+                    <Grid x:Name="PageNav" Height="22" Margin="0,0,34,10">
+                        <StackPanel x:Name="PageTabs" Orientation="Horizontal" VerticalAlignment="Center" />
+                        <StackPanel x:Name="PrivacyChip" Orientation="Horizontal" HorizontalAlignment="Right"
+                                    VerticalAlignment="Center" Visibility="Collapsed">
+                            <Ellipse x:Name="PrivacyChipDot" Width="7" Height="7" VerticalAlignment="Center" />
+                            <TextBlock x:Name="PrivacyChipText" FontSize="11" Margin="6,0,0,0" MaxWidth="170"
+                                       Foreground="{StaticResource Secondary}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- One page visible at a time; switching slides between them (SwitchPage). -->
+                    <Grid x:Name="PageHost" ClipToBounds="True">
+                    <StackPanel x:Name="HomePage">
+
+                    <Grid x:Name="MediaSection">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="MediaArtLarge" Width="64" Height="64" CornerRadius="14"
+                                    Background="{StaticResource ArtPlaceholder}">
+                                <TextBlock x:Name="MediaArtLargeFallback" Style="{StaticResource Glyph}" Text="&#xE8D6;"
+                                           FontSize="24" Foreground="{StaticResource Secondary}" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="14,0,30,0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                    <Ellipse x:Name="MediaAppDot" Width="6" Height="6" VerticalAlignment="Center"
+                                             Fill="{StaticResource Green}" />
+                                    <TextBlock x:Name="MediaAppName" FontSize="11" Margin="6,0,0,0"
+                                               Foreground="{StaticResource Secondary}" />
+                                </StackPanel>
+                                <TextBlock x:Name="MediaTitleLarge" FontSize="16" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="MediaArtistLarge" FontSize="13" Margin="0,2,0,0"
+                                           Foreground="{StaticResource Secondary}" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid x:Name="ProgressRow" Grid.Row="1" Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="42" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="42" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="ElapsedText" FontSize="11" VerticalAlignment="Center"
+                                       Foreground="{StaticResource Secondary}" Typography.NumeralAlignment="Tabular" />
+                            <!-- Transparent background makes the whole 14px band clickable for seeking. -->
+                            <Grid x:Name="ProgressHit" Grid.Column="1" Height="14" Background="Transparent"
+                                  MouseLeftButtonUp="OnProgressMouseUp">
+                                <Border Height="4" CornerRadius="2" Background="#33FFFFFF" VerticalAlignment="Center"
+                                        ClipToBounds="True">
+                                    <Border x:Name="ProgressFill" CornerRadius="2" Background="White"
+                                            RenderTransformOrigin="0,0.5">
+                                        <Border.RenderTransform>
+                                            <ScaleTransform ScaleX="0" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                </Border>
+                            </Grid>
+                            <TextBlock x:Name="RemainingText" Grid.Column="2" FontSize="11" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Foreground="{StaticResource Secondary}"
+                                       Typography.NumeralAlignment="Tabular" />
+                        </Grid>
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
+                            <Button x:Name="PrevButton" Style="{StaticResource IconButton}" Width="44" Height="40"
+                                    Click="OnPreviousClick" ToolTip="Previous">
+                                <TextBlock Style="{StaticResource Glyph}" Text="&#xE892;" FontSize="18" />
+                            </Button>
+                            <Button x:Name="PlayPauseButton" Style="{StaticResource IconButton}" Width="52" Height="44"
+                                    Margin="14,0" Click="OnPlayPauseClick">
+                                <TextBlock x:Name="PlayPauseGlyph" Style="{StaticResource Glyph}" Text="&#xE768;" FontSize="24" />
+                            </Button>
+                            <Button x:Name="NextButton" Style="{StaticResource IconButton}" Width="44" Height="40"
+                                    Click="OnNextClick" ToolTip="Next">
+                                <TextBlock Style="{StaticResource Glyph}" Text="&#xE893;" FontSize="18" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel x:Name="ClockSection">
+                        <TextBlock x:Name="BigTime" FontSize="36" FontWeight="Light" />
+                        <TextBlock x:Name="DateText" FontSize="13" Foreground="{StaticResource Secondary}" />
+                    </StackPanel>
+
+                    <Border Height="1" Background="#22FFFFFF" Margin="0,14,0,12" />
+
+                    <Grid x:Name="TimerPresets">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource Glyph}" Text="&#xE916;" FontSize="14"
+                                       Foreground="{StaticResource Orange}" />
+                            <TextBlock Text="Timer" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Style="{StaticResource ChipButton}" Tag="1" Content="1m" Click="OnTimerPresetClick" />
+                            <Button Style="{StaticResource ChipButton}" Tag="5" Content="5m" Click="OnTimerPresetClick" />
+                            <Button Style="{StaticResource ChipButton}" Tag="10" Content="10m" Click="OnTimerPresetClick" />
+                            <Button Style="{StaticResource ChipButton}" Tag="15" Content="15m" Click="OnTimerPresetClick" />
+                            <Button Style="{StaticResource ChipButton}" Tag="25" Content="25m" Click="OnTimerPresetClick" />
+                            <Button Style="{StaticResource ChipButton}" Tag="60" Content="1h" Click="OnTimerPresetClick" />
+                            <Button x:Name="StopwatchStartButton" Style="{StaticResource ChipButton}" Click="OnStopwatchStartClick"
+                                    ToolTip="Start a stopwatch">
+                                <TextBlock Style="{StaticResource Glyph}" Text="&#xE916;" FontSize="12" Foreground="{StaticResource Cyan}" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Running / paused stopwatch. -->
+                    <Grid x:Name="StopwatchPanel" Margin="0,8,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource Glyph}" Text="&#xE916;" FontSize="16"
+                                       Foreground="{StaticResource Cyan}" />
+                            <TextBlock x:Name="StopwatchTextLarge" FontSize="24" FontWeight="SemiBold" Margin="10,0,0,0"
+                                       VerticalAlignment="Center" Foreground="{StaticResource Cyan}"
+                                       Typography.NumeralAlignment="Tabular" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button Style="{StaticResource IconButton}" Width="38" Height="34" Click="OnStopwatchPauseClick">
+                                <TextBlock x:Name="StopwatchPauseGlyph" Style="{StaticResource Glyph}" Text="&#xE769;" FontSize="15" />
+                            </Button>
+                            <Button Style="{StaticResource IconButton}" Width="38" Height="34" Margin="2,0,0,0"
+                                    Click="OnStopwatchResetClick" ToolTip="Reset stopwatch">
+                                <TextBlock Style="{StaticResource Glyph}" Text="&#xE72C;" FontSize="14" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid x:Name="TimerActivePanel">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource Glyph}" Text="&#xE916;" FontSize="16"
+                                       Foreground="{StaticResource Orange}" />
+                            <TextBlock x:Name="TimerTextLarge" FontSize="24" FontWeight="SemiBold" Margin="10,0,0,0"
+                                       VerticalAlignment="Center" Foreground="{StaticResource Orange}"
+                                       Typography.NumeralAlignment="Tabular" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button Style="{StaticResource ChipButton}" Content="+1m" Click="OnTimerAddClick" />
+                            <Button Style="{StaticResource IconButton}" Width="38" Height="34" Margin="6,0,0,0"
+                                    Click="OnTimerPauseClick">
+                                <TextBlock x:Name="TimerPauseGlyph" Style="{StaticResource Glyph}" Text="&#xE769;" FontSize="15" />
+                            </Button>
+                            <Button Style="{StaticResource IconButton}" Width="38" Height="34" Margin="2,0,0,0"
+                                    Click="OnTimerCancelClick" ToolTip="Cancel timer">
+                                <TextBlock Style="{StaticResource Glyph}" Text="&#xE711;" FontSize="14" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                    </StackPanel>
+
+                    <!-- Notifications from other apps; rows built in code (BuildNotificationList). -->
+                    <StackPanel x:Name="NotificationsPage">
+                        <Grid x:Name="NotificationsToolbar" Margin="0,0,0,6">
+                            <TextBlock x:Name="NotificationsCount" FontSize="12" VerticalAlignment="Center"
+                                       Foreground="{StaticResource Secondary}" />
+                            <Button Style="{StaticResource ChipButton}" Content="Clear all" HorizontalAlignment="Right"
+                                    Click="OnNotificationsClearClick" ToolTip="Clear all notifications (also from Windows' notification center)" />
+                        </Grid>
+                        <ScrollViewer x:Name="NotificationsScroller" Style="{StaticResource SlimScroll}" MaxHeight="252">
+                            <StackPanel x:Name="NotificationList" />
+                        </ScrollViewer>
+                        <TextBlock x:Name="NotificationsEmpty" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,6"
+                                   HorizontalAlignment="Center" TextAlignment="Center" Foreground="{StaticResource Secondary}" />
+                        <Button x:Name="NotificationsSetup" Style="{StaticResource ChipButton}" Content="Set up…"
+                                HorizontalAlignment="Center" Margin="0,2,0,4" Click="OnIdentitySetupClick" />
+                    </StackPanel>
+
+                    <!-- Calendar: the next week from iCal links and the Windows calendar (BuildCalendar). -->
+                    <StackPanel x:Name="CalendarPage">
+                        <!-- Month grid: today highlighted, dots on days with events; click a day to list it. -->
+                        <Grid Margin="0,0,0,4">
+                            <TextBlock x:Name="CalendarMonthTitle" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Style="{StaticResource IconButton}" Width="28" Height="24" Click="OnCalendarPrevMonth" ToolTip="Previous month">
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE76B;" FontSize="11" />
+                                </Button>
+                                <Button Style="{StaticResource IconButton}" Width="28" Height="24" Click="OnCalendarNextMonth" ToolTip="Next month">
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE76C;" FontSize="11" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                        <UniformGrid x:Name="CalendarWeekdays" Columns="7" />
+                        <UniformGrid x:Name="CalendarDays" Columns="7" />
+                        <Border Height="1" Background="#22FFFFFF" Margin="0,8,0,8" />
+                        <ScrollViewer x:Name="CalendarScroller" Style="{StaticResource SlimScroll}" MaxHeight="150">
+                            <StackPanel x:Name="CalendarList" />
+                        </ScrollViewer>
+                        <TextBlock x:Name="CalendarEmpty" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,6"
+                                   HorizontalAlignment="Center" TextAlignment="Center" Foreground="{StaticResource Secondary}" />
+                    </StackPanel>
+
+                    <!-- File shelf: files dropped on the island; tiles are built in code (BuildShelf).
+                         Drag a tile (or "Drag all") out to drop the files anywhere. -->
+                    <Grid x:Name="ShelfPage">
+                        <StackPanel>
+                            <Grid x:Name="ShelfToolbar" Margin="0,0,0,8">
+                                <TextBlock x:Name="ShelfCount" FontSize="12" VerticalAlignment="Center"
+                                           Foreground="{StaticResource Secondary}" />
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button x:Name="ShelfDragAll" Style="{StaticResource ChipButton}" Content="Drag all"
+                                            ToolTip="Drag every file on the shelf somewhere" />
+                                    <Button Style="{StaticResource ChipButton}" Content="Clear" Click="OnShelfClearClick"
+                                            ToolTip="Remove everything from the shelf (the files themselves stay where they are)" />
+                                </StackPanel>
+                            </Grid>
+                            <ScrollViewer x:Name="ShelfScroller" Style="{StaticResource SlimScroll}" MaxHeight="196">
+                                <WrapPanel x:Name="ShelfItems" />
+                            </ScrollViewer>
+                            <Grid x:Name="ShelfEmpty" Height="104">
+                                <Rectangle RadiusX="14" RadiusY="14" Stroke="#55FFFFFF" StrokeThickness="1.5"
+                                           StrokeDashArray="4 3" />
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE896;" FontSize="20"
+                                               Foreground="{StaticResource Secondary}" />
+                                    <TextBlock Text="Drop files here" FontSize="13" FontWeight="SemiBold" Margin="0,8,0,0"
+                                               HorizontalAlignment="Center" />
+                                    <TextBlock Text="Drag files onto the island to keep them handy" FontSize="11"
+                                               Margin="0,2,0,0" HorizontalAlignment="Center"
+                                               Foreground="{StaticResource Secondary}" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                        <!-- Shown while files are dragged over the island. -->
+                        <Grid x:Name="ShelfDropOverlay" Visibility="Collapsed" IsHitTestVisible="False">
+                            <Rectangle x:Name="ShelfDropRect" RadiusX="14" RadiusY="14" StrokeThickness="2"
+                                       StrokeDashArray="4 3" Fill="#B0000000" Stroke="White" />
+                            <TextBlock x:Name="ShelfDropText" Text="Drop to add to the shelf" FontSize="13"
+                                       FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                    </Grid>
+
+                    <!-- Weather: now, the next 12 hours, 5 days. Icons and rows are built in code (UpdateWeather). -->
+                    <StackPanel x:Name="WeatherPage">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="WeatherNowIcon" Width="50" Height="50" VerticalAlignment="Center" />
+                            <TextBlock x:Name="WeatherNowTemp" Grid.Column="1" FontSize="40" FontWeight="Light"
+                                       Margin="10,0,14,0" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular" />
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                <TextBlock x:Name="WeatherCondition" FontSize="15" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="WeatherDetail" FontSize="12" Margin="0,2,0,0"
+                                           Foreground="{StaticResource Secondary}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="WeatherPlaceText" FontSize="11" Margin="0,2,0,0"
+                                           Foreground="{StaticResource Secondary}" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
+                        <UniformGrid x:Name="WeatherHours" Rows="1" Margin="0,14,0,0" />
+                        <Border Height="1" Background="#22FFFFFF" Margin="0,12,0,8" />
+                        <StackPanel x:Name="WeatherDays" />
+                        <TextBlock x:Name="WeatherProblemText" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                   Foreground="{StaticResource Secondary}" Visibility="Collapsed" />
+                        <!-- Required attribution: Open-Meteo data is licensed CC BY 4.0. -->
+                        <TextBlock Text="Weather data by Open-Meteo.com" FontSize="10" Margin="0,6,0,0"
+                                   HorizontalAlignment="Right" Foreground="{StaticResource Secondary}" Opacity="0.7" />
+                    </StackPanel>
+
+                    <!-- Quick-launch apps; tiles are built in code from the QuickApps setting. -->
+                    <ScrollViewer x:Name="AppsPage" Style="{StaticResource SlimScroll}" MaxHeight="232">
+                        <WrapPanel x:Name="QuickAppsRow" HorizontalAlignment="Center" />
+                    </ScrollViewer>
+
+                    <StackPanel x:Name="WallpaperPage">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                <!-- Shows the wallpaper's (often animated) preview; brush is only attached while expanded. -->
+                                <Border x:Name="WallpaperThumb" Width="48" Height="48" CornerRadius="10"
+                                        Background="{StaticResource ArtPlaceholder}">
+                                    <TextBlock x:Name="WallpaperThumbFallback" Style="{StaticResource Glyph}"
+                                               Text="&#xE8B9;" FontSize="16" Foreground="{StaticResource Secondary}" />
+                                </Border>
+                                <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="WALLPAPER" FontSize="9" FontWeight="SemiBold"
+                                               Foreground="{StaticResource Secondary}" />
+                                    <TextBlock x:Name="WallpaperTitle" Text="Wallpaper Engine" FontSize="13"
+                                               FontWeight="SemiBold" MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Style="{StaticResource IconButton}" Width="38" Height="30"
+                                        Click="OnWallpaperPauseClick" ToolTip="Pause / resume wallpaper">
+                                    <TextBlock x:Name="WallpaperPauseGlyph" Style="{StaticResource Glyph}"
+                                               Text="&#xE769;" FontSize="14" />
+                                </Button>
+                                <Button Style="{StaticResource IconButton}" Width="38" Height="30" Margin="2,0,0,0"
+                                        Click="OnWallpaperMuteClick" ToolTip="Mute / unmute wallpaper">
+                                    <TextBlock x:Name="WallpaperMuteGlyph" Style="{StaticResource Glyph}"
+                                               Text="&#xE767;" FontSize="14" />
+                                </Button>
+                                <Button Style="{StaticResource IconButton}" Width="38" Height="30" Margin="2,0,0,0"
+                                        Click="OnWallpaperNextClick" ToolTip="Next wallpaper (playlist)">
+                                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE893;" FontSize="14" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                    </Grid>
+
+                </StackPanel>
+
+                <Button Style="{StaticResource IconButton}" Width="30" Height="30"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,12,0"
+                        Click="OnSettingsClick" ToolTip="Settings (or right-click the island)">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE713;" FontSize="14"
+                               Foreground="{StaticResource Secondary}" />
+                </Button>
+            </Grid>
+
+        </Grid>
+
+        <!-- Second activity (e.g. music while a timer runs), as a small bubble beside the pill like the
+             iPhone's split island. Content set in UpdateSecondActivity; positioned in ApplyGeometry. -->
+        <Grid x:Name="ActivityBubble" HorizontalAlignment="Left" VerticalAlignment="Top" Width="36" Height="36"
+              Visibility="Collapsed" RenderTransformOrigin="0,0.5" Cursor="Hand">
+            <Grid.RenderTransform>
+                <ScaleTransform />
+            </Grid.RenderTransform>
+            <Ellipse x:Name="ActivityBubbleBack" Fill="#F00B0B0C" />
+            <Ellipse x:Name="ActivityBubbleArt" Margin="5" Visibility="Collapsed" />
+            <TextBlock x:Name="ActivityBubbleGlyph" Style="{StaticResource Glyph}" FontSize="15" Text="&#xE916;" />
+        </Grid>
+
+        <!-- Mic (orange) / camera (green) in use, just right of the collapsed pill like the iPhone's
+             privacy dot. Outside ContentLayer's clip; positioned in ApplyGeometry. -->
+        <Ellipse x:Name="PrivacyDot" Width="7" Height="7" HorizontalAlignment="Left" VerticalAlignment="Top"
+                 IsHitTestVisible="False" Visibility="Collapsed" />
+    </Grid>
+</Window>

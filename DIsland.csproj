@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>DIsland</AssemblyName>
+    <RootNamespace>DIsland</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>DIsland.ico</ApplicationIcon>
+    <Product>D-Island</Product>
+    <Version>1.1.0</Version>
+    <Description>A Dynamic Island for Windows</Description>
+    <Authors>h7</Authors>
+    <Company>ibuildrigs</Company>
+    <Copyright>Copyright (c) 2026 h7 (ibuildrigs). Licensed under the D-Island License 1.0.</Copyright>
+    <PackageProjectUrl>https://github.com/H7gamer/d-island</PackageProjectUrl>
+    <!-- WinForms' DPI analyzer; WPF owns DPI here and reads it from app.manifest. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+
+    <!-- Always-running overlay: favour a small, quiet footprint. No background GC thread (the heap is
+         tiny) and English-only satellite resources. Tiered PGO is OFF: measured, it re-JITs for about
+         0.6 s of CPU after every launch (instrumented tier, then tier-1) and made animation no faster
+         (35.4% vs 30.9% of a core, optimised build, 3 runs each). The app's time goes to rendering. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- WPF and WinForms both define Application, MessageBox, Brush, etc.; only the tray file opts into WinForms/Drawing. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Ical.Net" Version="4.3.1" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="Vortice.DirectComposition" Version="3.6.2" />
+  </ItemGroup>
+
+  <!-- Sparse package (identity for notifications + Windows calendar): the manifest and the script
+       that packs, signs and registers it, next to the exe. See Identity\setup-identity.ps1. -->
+  <ItemGroup>
+    <None Include="Identity\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Licence, privacy statement and third-party notices travel with every build (Settings > About links them). -->
+  <ItemGroup>
+    <None Include="LICENSE.txt;NOTICE.txt;PRIVACY.txt;THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Repository files that aren't part of the app. -->
+    <None Remove=".github\**" />
+    <Compile Remove=".github\**" />
+  </ItemGroup>
+
+</Project>

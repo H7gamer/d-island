@@ -1,0 +1,35 @@
+D-Island
+Copyright 2026 h7 (ibuildrigs) and the D-Island contributors.
+Created by h7 (ibuildrigs) - https://ibuildrigs.com - https://github.com/H7gamer/d-island
+
+D-Island 1.1.0 and later are licensed under the D-Island License 1.0 (see LICENSE.txt). Versions before 1.1.0 were released under the Apache License 2.0.
+
+
+REQUIRED CREDIT
+
+Anyone who distributes D-Island or a modified version must show this credit where users can see it, at least in the software's About, credits or settings screen (D-Island License, section 3(a)):
+
+    Based on D-Island by h7 (ibuildrigs) - https://github.com/H7gamer/d-island
+
+
+OFFICIAL DISTRIBUTION
+
+Official D-Island releases are published only at:
+- https://github.com/H7gamer/d-island (GitHub Releases of this repository)
+- https://ibuildrigs.com
+
+Copies of D-Island, its installer or modified versions downloaded from anywhere else, including other GitHub repositories, forks, mirrors, download sites, app stores and package managers, are not authorised, checked or supported by h7 or ibuildrigs. They may have been changed, for example to include malware. Anyone who downloads, installs or uses such a copy does so entirely at their own risk.
+
+Because D-Island can read notifications, the clipboard, calendars and media information on a computer, only install it from the official sources above. D-Island's built-in updater only installs official releases from GitHub, and checks each download against the checksum published with it.
+
+
+NAMES AND TRADEMARKS
+
+"D-Island", "h7" and "ibuildrigs" identify the original author and the official releases. The license does not grant permission to use these names or the D-Island icon, except to give the required credit and to describe the origin of the work truthfully. Modified versions must not present themselves as official D-Island releases, and must use a different name and icon.
+
+Apple, iPhone, Dynamic Island, Apple Music and iCloud are trademarks of Apple Inc. Windows, Microsoft, Outlook and Teams are trademarks of Microsoft Corporation. Other names are trademarks of their respective owners. D-Island is an independent project and is not affiliated with, endorsed or sponsored by any of them.
+
+
+THIRD-PARTY COMPONENTS
+
+D-Island includes open-source components under their own licenses; see THIRD-PARTY-NOTICES.txt.

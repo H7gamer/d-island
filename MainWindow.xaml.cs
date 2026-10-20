@@ -587,8 +587,7 @@ public partial class MainWindow : Window
 #endif
         if (updatedFrom is not null)
         {
-            _ = Task.Delay(2500).ContinueWith(_ => (Application.Current as App)?.ShowWhatsNew(updatedFrom),
-                TaskScheduler.FromCurrentSynchronizationContext());
+            _ = ShowWhatsNewSoonAsync(updatedFrom);
             _ = Task.Delay(3000).ContinueWith(_ => ShowInfo(TransientPriority.Calendar, 300, "", "D-Island updated",
                     $"Version {current}", detailBrush: (Brush)FindResource("Green"), seconds: 5),
                 TaskScheduler.FromCurrentSynchronizationContext());
@@ -605,15 +604,40 @@ public partial class MainWindow : Window
         updates.Start();
     }
 
+    private async Task ShowWhatsNewSoonAsync(Version updatedFrom)
+    {
+        await Task.Delay(2500); // let the island settle first
+        try
+        {
+            (Application.Current as App)?.ShowWhatsNew(updatedFrom);
+        }
+        catch (Exception ex)
+        {
+            App.LogError(ex); // never silently: this window is the only sign an update happened
+        }
+    }
+
     /// <summary>
     /// A verified update is ready. Install at a quiet moment only: not while a timer, stopwatch or alarm is
     /// running, the island is open, or an alert is showing. The updater asks again every 10 minutes.
     /// </summary>
     private void OnUpdateReady(UpdateInfo info)
     {
-        if (_timer.IsActive || _stopwatch.IsActive || _alarmSound is not null || _state.IsExpanded
-            || _state.Transient is not null || _animating)
-            return;
+        var waitingFor = _timer.IsActive ? "a timer is running"
+            : _stopwatch.IsActive ? "the stopwatch is running"
+            : _alarmSound is not null ? "an alarm is ringing"
+            : _state.IsExpanded || _typing ? "the island is open"
+            : _state.Transient is not null || _animating ? "an alert is showing"
+            : null;
+        if (App.Updates is { } updates && updates.WaitingFor != waitingFor)
+        {
+            updates.WaitingFor = waitingFor;
+#if DEBUG
+            if (Environment.GetEnvironmentVariable("DISLAND_UPDATE_LOG") is { Length: > 0 } log)
+                System.IO.File.AppendAllText(log, $"{DateTime.Now:HH:mm:ss.fff} install {(waitingFor is null ? "now" : "waits: " + waitingFor)}\n");
+#endif
+        }
+        if (waitingFor is not null) return; // asked again in 15 s
         ShowInfo(TransientPriority.TimerDone, 320, "", "Updating D-Island", $"to {info.Version}",
             detailBrush: (Brush)FindResource("Green"), seconds: 4);
         _ = Task.Delay(2500).ContinueWith(_ => App.Updates?.Install(), TaskScheduler.FromCurrentSynchronizationContext());

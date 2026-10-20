@@ -1,6 +1,9 @@
 **D-Island {VERSION}**, a Dynamic Island for Windows 10 and 11.
 
-### What's new
+### What's new in 1.2.1
+- **Updates install by themselves:** a downloaded update now installs within seconds of the island being free (no timer, alarm or open island), instead of waiting up to 10 minutes. Settings > Updates shows what it's waiting for.
+
+### New in 1.2
 - **To-Do list:** a new page for quick tasks. Type, press Enter, tick them off.
 - **Notes:** a scratch pad in the island that saves as you type. Press Esc to give the keyboard back to your app.
 - **Smoother animations:** switching between Dynamic Island and notch now morphs from one to the other, and hiding or showing the island (Ctrl+Alt+I) shrinks it into the top edge and back.
@@ -8,7 +11,7 @@
 - **Hide shortcut works on more PCs:** if another app already uses the shortcut, D-Island still responds to it, and Settings says so.
 - **What's New:** after every update, a short summary of what changed (also in Settings > Updates).
 
-Already using D-Island 1.1.0? It updates itself within a day, or right away from Settings > Updates > Check for updates.
+Already using D-Island? It updates itself within a day, or right away from Settings > Updates > Check for updates.
 
 ### Highlights
 - **Pages:** Home (now playing, timers, stopwatch), Notifications, Calendar (month view, Join buttons), To-Do, Notes, Shelf (drag files in and out), Weather and Apps. Switch with the mouse wheel, touchpad or tabs.

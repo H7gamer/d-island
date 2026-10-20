@@ -24,6 +24,12 @@ public static class WhatsNew
 
     public static readonly IReadOnlyList<Release> Releases = new[]
     {
+        new Release(new Version(1, 2, 1), new[]
+        {
+            new Item("", "#FF30D158", "Updates install by themselves",
+                "A downloaded update now installs within seconds of the island being free, instead of " +
+                "waiting up to 10 minutes. Settings > Updates shows what it's waiting for."),
+        }),
         new Release(new Version(1, 2, 0), new[]
         {
             new Item("", "#FF30D158", "To-Do list",

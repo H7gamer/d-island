@@ -2,7 +2,7 @@ D-ISLAND PRIVACY STATEMENT
 What D-Island reads, where it goes, and what is stored
 
 D-Island by h7 (ibuildrigs) - https://ibuildrigs.com
-Applies to D-Island version 1.2.0.
+Applies to D-Island version 1.2.1.
 
 
 IN SHORT

@@ -53,13 +53,24 @@ public sealed class UpdateService
 
     private readonly AppSettings _settings;
     private readonly DispatcherTimer _timer = new(DispatcherPriority.Background) { Interval = TimeSpan.FromMinutes(10) };
+    // A downloaded update asks again every 15 s for a quiet moment to install. (1.1.0 asked every 10
+    // minutes, so an alert showing at the wrong second made it look as if nothing happened.)
+    private readonly DispatcherTimer _installRetry = new(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(15) };
     private bool _busy;
 
     public UpdateService(AppSettings settings)
     {
         _settings = settings;
         _timer.Tick += async (_, _) => await TickAsync();
+        _installRetry.Tick += (_, _) =>
+        {
+            if (State == UpdateState.ReadyToInstall && Latest is { } ready && _settings.AutoInstallUpdates) ReadyToInstall?.Invoke(ready);
+            else _installRetry.Stop();
+        };
     }
+
+    /// <summary>Why a downloaded update hasn't been installed yet (e.g. "a timer is running"); shown in Settings.</summary>
+    public string? WaitingFor { get; set; }
 
     /// <summary>Installed by the setup program (and so able to update itself), not a development build.</summary>
     public static bool IsInstalled =>
@@ -101,7 +112,11 @@ public sealed class UpdateService
             TaskScheduler.FromCurrentSynchronizationContext());
     }
 
-    public void Stop() => _timer.Stop();
+    public void Stop()
+    {
+        _timer.Stop();
+        _installRetry.Stop();
+    }
 
     private async Task TickAsync()
     {
@@ -185,7 +200,10 @@ public sealed class UpdateService
     private void SetState(UpdateState state)
     {
         if (state != UpdateState.Failed) Error = null;
+        if (state != UpdateState.ReadyToInstall) WaitingFor = null;
         State = state;
+        if (state == UpdateState.ReadyToInstall) _installRetry.Start();
+        else _installRetry.Stop();
 #if DEBUG
         if (Environment.GetEnvironmentVariable("DISLAND_UPDATE_LOG") is { Length: > 0 } log)
             File.AppendAllText(log, $"{DateTime.Now:HH:mm:ss.fff} {state} {Latest?.Version} {Error}\n");

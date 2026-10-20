@@ -357,7 +357,11 @@ public partial class SettingsWindow : Window
                     $"{current} Version {u.Latest?.Version} is available. This copy wasn't installed with the setup program, so download it from GitHub.",
                 UpdateState.Available => $"{current} Version {u.Latest?.Version} is available.",
                 UpdateState.Downloading => $"{current} Downloading version {u.Latest?.Version}…",
-                UpdateState.ReadyToInstall => $"{current} Version {u.Latest?.Version} is downloaded and verified; it installs when nothing is running.",
+                UpdateState.ReadyToInstall when !_settings.AutoInstallUpdates =>
+                    $"{current} Version {u.Latest?.Version} is downloaded and verified. Click Install now.",
+                UpdateState.ReadyToInstall => u.WaitingFor is { } reason
+                    ? $"{current} Version {u.Latest?.Version} is downloaded and verified. It installs as soon as nothing is in the way (now: {reason})."
+                    : $"{current} Version {u.Latest?.Version} is downloaded and verified, and installs in a moment.",
                 UpdateState.Installing => $"Installing version {u.Latest?.Version}…",
                 UpdateState.Failed => $"{current} Update check failed: {u.Error}.",
                 _ => _settings.LastUpdateCheck is { } last ? $"{current} Last checked {last.ToLocalTime():g}." : current,

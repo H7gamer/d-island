@@ -259,8 +259,10 @@ dotnet run -c Release              # everyday use
   - **Download:** to `%LocalAppData%\DIsland\Updates`. It fails after 30 s without data, caps the
     size at 400 MB, and deletes the file on a checksum mismatch.
   - **Install:** only when the app runs from an installation (`unins000.exe` next to the exe) and
-    the island is idle: no timer, stopwatch or alarm, collapsed, no alert, not animating. Otherwise
-    it retries every 10 minutes. It runs `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+    the island is idle: no timer, stopwatch or alarm, collapsed, not typing, no alert, not
+    animating. Otherwise it asks again every 15 s (`_installRetry`; 1.1.0 and 1.2.0 waited 10
+    minutes, and in the first real update test the user clicked Install now before it retried).
+    `WaitingFor` names the blocker in Settings and in `DISLAND_UPDATE_LOG`. It runs `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART
     /MERGETASKS="!identity"`. The installer's `[Run]` entry with `Check: WizardSilent` relaunches
     the island, which then shows "D-Island updated" (`LastRunVersion`).
   - **Static fields:** `CurrentVersion` must stay declared above `Http`. Static fields initialise in
@@ -342,7 +344,10 @@ What the installer contains and does:
   - The silent install relaunches the island.
   - The updater, against a local feed: it installs when the checksum matches, and deletes the
     download and fails when it doesn't.
-  - **Not tested:** a real update from GitHub, which needs two published releases.
+  - **Real update from GitHub, 1.1.0 → 1.2.0:** the official 1.1.0 was installed silently into a
+    scratch folder. It checked after 1 minute, downloaded and verified 1.2.0 in about 80 s, and was
+    then waiting (see Install above). The installer relaunched the island, and the What's New
+    window showed on the next start.
 
 ## Open items and untested areas
 

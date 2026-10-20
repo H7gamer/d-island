@@ -1,0 +1,81 @@
+# D-Island - Copyright 2026 h7 (ibuildrigs) and contributors.
+# Licensed under the D-Island License 1.0; see LICENSE.txt and NOTICE.txt.
+
+# Builds the installer on a Windows runner and publishes the GitHub release with BOTH assets the
+# in-app updater needs: D-Island-Setup-<v>.exe and D-Island-Setup-<v>.exe.sha256.
+#
+#   - Push a tag v<x.y.z> (matching <Version> in DIsland.csproj) to release it, or
+#   - run it by hand from the Actions tab with an existing tag (e.g. to rebuild v1.1.0).
+#
+# Release notes come from .github/release-notes.md ({VERSION} and {SHA256} are filled in).
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and release, e.g. v1.1.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # Notes and this workflow live on main; a tag cut before they existed won't have them.
+      - name: Get the release notes template from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: _main
+          sparse-checkout: .github
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Check the tag matches the csproj version
+        shell: powershell
+        run: |
+          $version = ([xml](Get-Content DIsland.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG doesn't match <Version>$version</Version> in DIsland.csproj" }
+          "VERSION=$version" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Install Inno Setup 6
+        shell: powershell
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      # Windows PowerShell (not pwsh): the script draws the icon and wizard art with System.Drawing.
+      - name: Build the installer
+        shell: powershell
+        run: .\tools\build-installer.ps1
+
+      - name: Publish the release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $setup = "artifacts\D-Island-Setup-$env:VERSION.exe"
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
+          $notes = (Get-Content _main\.github\release-notes.md -Raw).Replace('{VERSION}', $env:VERSION).Replace('{SHA256}', $hash)
+          [System.IO.File]::WriteAllText("$PWD\notes.md", $notes)
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:TAG $setup "$setup.sha256" --clobber
+            gh release edit $env:TAG --notes-file notes.md --draft=false --latest
+          } else {
+            gh release create $env:TAG $setup "$setup.sha256" --title "D-Island $env:VERSION" --notes-file notes.md --latest
+          }
+          if ($LASTEXITCODE -ne 0) { throw "gh failed ($LASTEXITCODE)" }

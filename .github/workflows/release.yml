@@ -33,13 +33,14 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
-      # Notes and this workflow live on main; a tag cut before they existed won't have them.
+      # Notes and this workflow live on main; a tag cut before they existed won't have them. Read the
+      # one file with git: a second checkout inside the workspace would be compiled too (the csproj
+      # globs every .cs file under it).
       - name: Get the release notes template from main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          path: _main
-          sparse-checkout: .github
+        shell: cmd   # byte-exact redirect; Windows PowerShell would re-encode the UTF-8 text
+        run: |
+          git fetch --depth=1 origin main
+          git cat-file blob FETCH_HEAD:.github/release-notes.md > "%RUNNER_TEMP%\release-notes.md"
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -69,13 +70,13 @@ jobs:
         run: |
           $setup = "artifacts\D-Island-Setup-$env:VERSION.exe"
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
-          $notes = (Get-Content _main\.github\release-notes.md -Raw).Replace('{VERSION}', $env:VERSION).Replace('{SHA256}', $hash)
-          [System.IO.File]::WriteAllText("$PWD\notes.md", $notes)
+          $notes = (Get-Content "$env:RUNNER_TEMP\release-notes.md" -Raw -Encoding utf8).Replace('{VERSION}', $env:VERSION).Replace('{SHA256}', $hash)
+          [System.IO.File]::WriteAllText("$env:RUNNER_TEMP\notes.md", $notes)
           gh release view $env:TAG *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $env:TAG $setup "$setup.sha256" --clobber
-            gh release edit $env:TAG --notes-file notes.md --draft=false --latest
+            gh release edit $env:TAG --notes-file "$env:RUNNER_TEMP\notes.md" --draft=false --latest
           } else {
-            gh release create $env:TAG $setup "$setup.sha256" --title "D-Island $env:VERSION" --notes-file notes.md --latest
+            gh release create $env:TAG $setup "$setup.sha256" --title "D-Island $env:VERSION" --notes-file "$env:RUNNER_TEMP\notes.md" --latest
           }
           if ($LASTEXITCODE -ne 0) { throw "gh failed ($LASTEXITCODE)" }

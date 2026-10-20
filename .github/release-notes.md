@@ -4,6 +4,7 @@
 - **To-Do list:** a new page for quick tasks. Type, press Enter, tick them off.
 - **Notes:** a scratch pad in the island that saves as you type. Press Esc to give the keyboard back to your app.
 - **Smoother animations:** switching between Dynamic Island and notch now morphs from one to the other, and hiding or showing the island (Ctrl+Alt+I) shrinks it into the top edge and back.
+- **Your town in Weather:** with "My location", the weather page shows the town's name (from OpenStreetMap) instead of "My location".
 - **Hide shortcut works on more PCs:** if another app already uses the shortcut, D-Island still responds to it, and Settings says so.
 - **What's New:** after every update, a short summary of what changed (also in Settings > Updates).
 

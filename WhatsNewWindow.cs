@@ -33,6 +33,8 @@ public static class WhatsNew
             new Item("", "#FF64D2FF", "Smoother animations",
                 "Switching between Dynamic Island and notch now morphs, and hiding or showing the island " +
                 "shrinks it into the top edge and back."),
+            new Item("", "#FF5AC8FA", "Your town in Weather",
+                "With \"My location\", the weather page now shows where you are instead of \"My location\"."),
             new Item("", "#FFFF9F0A", "Hide shortcut works everywhere",
                 "If another app already uses the shortcut, D-Island still responds to it, and Settings tells you."),
             new Item("", "#FFBF5AF2", "What's new",

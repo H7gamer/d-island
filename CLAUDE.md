@@ -22,7 +22,7 @@ dotnet run -c Release              # everyday use
   code 0 means it works.
 - **Files:**
   - Errors: `%AppData%\DIsland\error.log`. Settings: `%AppData%\DIsland\settings.json`. Shelf:
-    `%LocalAppData%\DIsland\shelf.json`. Motion artwork:
+    `%LocalAppData%\DIsland\shelf.json`. To-do list and notes: `%LocalAppData%\DIsland\notes.json`. Motion artwork:
     `%LocalAppData%\DIsland\MotionArt\`. Identity setup: `%LocalAppData%\DIsland\Identity\`.
   - Don't overwrite a user's settings in tests without a backup.
 - **Debug-only hooks.** These are compiled with `#if DEBUG`. Set one as an environment variable
@@ -60,6 +60,9 @@ dotnet run -c Release              # everyday use
     - `DISLAND_UPDATE_LOG=<txt>` logs each state change and exception.
     - **Testing:** serve a small payload (a few MB) from a PowerShell `HttpListener`. A 50 MB write
       from a PowerShell job is very slow.
+    - `DISLAND_WHATSNEW=<version>` shows the What's New window as if updated from that version.
+  - **Animation:** `DISLAND_ANIM_FRAMES=<folder>` records the island → notch → island morph and
+    hide → show as PNG frames every 40 ms (the shape change is in memory only).
   - **Snapshot timing:** the first launch after a build starts slowly. Allow at least 7 s or retry
     once before deciding that a snapshot failed.
 - **Test scripts** in `tools/`:
@@ -114,6 +117,8 @@ dotnet run -c Release              # everyday use
 | `Services/PackageIdentity.cs`, `Identity/` | Identity check, the sparse package manifest and its setup script. |
 | `Services/Hotkey.cs` | `RegisterHotKey` wrapper (default Ctrl+Alt+I hides/shows the island). |
 | Other services | Volume, Brightness (WMI), Battery, VolumeKeyHook, StartupManager (HKCU Run value `DIsland`). |
+| `Services/NotesService.cs` | To-do list and notes (`notes.json`); the pages and typing are in `MainWindow`. |
+| `WhatsNewWindow.cs` | Per-version change list (`WhatsNew.Releases`) and the window shown after an update. |
 | `Services/UpdateService.cs` | In-app updater: checks GitHub's latest release, downloads, verifies the SHA-256 and installs silently (see Decisions). |
 | `installer/`, `tools/build-installer.ps1` | Inno Setup installer, guide, wizard art generation, `.sha256` file. |
 | `LICENSE.txt`, `NOTICE.txt`, `PRIVACY.txt`, `THIRD-PARTY-NOTICES.txt` | The D-Island License 1.0; required credit, official-distribution and trademark notice; privacy statement; third-party licenses. **Keep `PRIVACY.txt` in sync with any new data source.** Write these one line per paragraph (the installer re-wraps text). |
@@ -260,6 +265,43 @@ dotnet run -c Release              # everyday use
     the island, which then shows "D-Island updated" (`LastRunVersion`).
   - **Static fields:** `CurrentVersion` must stay declared above `Http`. Static fields initialise in
     order, and the client's User-Agent uses the version.
+  - **No SmartScreen prompt on updates:** the updater downloads with `HttpClient`, so the installer
+    has no Mark of the Web, and SmartScreen only ever checks the first, browser-downloaded install.
+- **What's New** (`WhatsNewWindow.cs`): shown once on the first start of a newer version
+  (`LastRunVersion` < current), automatic or manual update alike, never on a fresh install; also
+  from Settings > Updates. **Every release needs an entry in `WhatsNew.Releases`** (and the "What's
+  new" part of `.github/release-notes.md`). Without one, the window falls back to the latest entry.
+- **Shape morph and hide/show:** a fourth spring, `_notch` (0 island … 1 notch, critically damped),
+  drives `PillTop` and `BuildNotch(…, t)` in three phases: slide up to the edge, square the top
+  corners, flare the shoulders. The GPU blur's clip is one rounded rectangle, so its top corners
+  may only square off once the shape touches the edge, because the clip's square top then hangs
+  above the window. Hiding springs the pill to 0 × 0 and fades `Root`, then hides the window
+  once settled (`FinishHide`); showing grows it back from 0.
+- **Typing in the island** (To-Do, Notes): the window is `WS_EX_NOACTIVATE`, so it can't get
+  the keyboard. `BeginTyping` clears that style and calls `SetForegroundWindow`, which Windows
+  allows because this process just got the click. `EndTyping` restores the style and returns
+  focus to the previous foreground window (Esc, collapse, page switch, hide), or lets go when the
+  window is deactivated. While typing, the island doesn't auto-collapse and copy/paste alerts are
+  off. Clicks on these pages are marked handled so they don't collapse the island. Data:
+  `NotesService`, `%LocalAppData%\DIsland\notes.json`, written through a temporary file;
+  typing is saved after 500 ms.
+- **Hide shortcut when another app owns it:** `RegisterHotKey` is first come, first served. On
+  failure the same combination is matched from raw input (`KeyboardWatcher.Shortcut`). When
+  another app has the hotkey, Windows swallows the key-down entirely, and raw input sees only the
+  key-up, so the fallback fires on a key-up whose key-down never arrived. Modifiers are tracked
+  from the raw stream: `GetAsyncKeyState` is already "up" when quickly pressed keys are
+  processed. An entry also counts only while Windows agrees it's down, or for 500 ms, so a missed
+  key-up (Win+L) can't leave it stuck.
+- **Weather place name:** with "My location", the town comes from OpenStreetMap Nominatim reverse
+  geocoding (same 2-decimal coordinates, `zoom=10`). It's asked once per place and cached in
+  settings (`WeatherDevicePlace` and its key). The User-Agent names the app and repository, as
+  Nominatim's policy requires, and the page credits OpenStreetMap whenever it shows the name.
+- **Code signing (optional):** `build-installer.ps1` signs the app, setup and uninstaller when
+  `DISLAND_SIGN_PFX` or `DISLAND_SIGN_PFX_BASE64` (plus `DISLAND_SIGN_PASSWORD`) is set. The
+  release workflow maps them from the repository secrets `SIGN_PFX_BASE64` and
+  `SIGN_PFX_PASSWORD`. The certificate is imported for the build and used by thumbprint, because
+  Inno Setup echoes the sign command into the log, which must not show the password. Tested with
+  a throwaway self-signed certificate.
 
 ## Measurements (development machine, Debug unless noted, 3-run averages)
 
@@ -280,12 +322,14 @@ dotnet run -c Release              # everyday use
 - compiles `installer\DIsland.iss` with Inno Setup 6, producing `artifacts\D-Island-Setup-<v>.exe`,
 - writes `artifacts\D-Island-Setup-<v>.exe.sha256`.
 
-**Releasing:**
-1. Bump `<Version>` in `DIsland.csproj` and update `PRIVACY.txt` if anything changed.
-2. Build the installer.
-3. Commit, then tag `v<x.y.z>`.
-4. Publish a GitHub release (not a prerelease) with **both** the `.exe` and the `.sha256`. Without
-   the checksum asset, the updater ignores the release.
+**Releasing** (GitHub Actions, `.github/workflows/release.yml`):
+1. Bump `<Version>` in `DIsland.csproj`. Add the version's `WhatsNew.Releases` entry, and update
+   the "What's new" part of `.github/release-notes.md` and `PRIVACY.txt` if anything changed.
+2. Commit and push `main`, then push the tag `v<x.y.z>`, which must match `<Version>`.
+3. The workflow builds on a Windows runner and publishes the release with **both** the `.exe` and
+   the `.sha256`. Without the checksum asset, the updater ignores the release.
+4. Check that the release has both assets (the public API:
+   `/repos/H7gamer/d-island/releases/latest`).
 
 What the installer contains and does:
 - **Wizard pages:** a per-user install with no admin; the license (`LICENSE.txt`) the user must
@@ -317,7 +361,8 @@ What the installer contains and does:
 - **Possible next steps:**
   - Render the island with DirectComposition instead of a WPF layered window, to remove the
     per-frame readback.
-  - Code-sign releases so SmartScreen doesn't warn.
+  - Get a code-signing certificate and add it as the `SIGN_PFX_BASE64` / `SIGN_PFX_PASSWORD`
+    secrets, so SmartScreen stops warning on first installs (the signing pipeline is ready).
 
 ## Conventions
 

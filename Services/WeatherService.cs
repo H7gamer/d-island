@@ -66,7 +66,8 @@ public sealed class WeatherService : IDisposable
 
     static WeatherService()
     {
-        Http.DefaultRequestHeaders.UserAgent.ParseAdd("D-Island/1.0");
+        // Identifies the app (and where to reach its author), as OpenStreetMap's Nominatim policy requires.
+        Http.DefaultRequestHeaders.UserAgent.ParseAdd($"D-Island/{UpdateService.CurrentVersion} (+https://github.com/H7gamer/d-island)");
     }
 
     public WeatherService(AppSettings settings)
@@ -245,7 +246,43 @@ public sealed class WeatherService : IDisposable
         }
         var p = position.Coordinate.Point.Position;
         // ~1 km is plenty for weather; don't send a precise location anywhere.
-        return (Math.Round(p.Latitude, 2), Math.Round(p.Longitude, 2), "My location");
+        var (latitude, longitude) = (Math.Round(p.Latitude, 2), Math.Round(p.Longitude, 2));
+        return (latitude, longitude, await PlaceNameAsync(latitude, longitude, cancel) ?? "My location");
+    }
+
+    /// <summary>
+    /// The town or city at the (already rounded) coordinates, from OpenStreetMap's Nominatim, for the
+    /// weather page instead of "My location". Asked once per place and remembered in settings, as
+    /// Nominatim's usage policy asks; null when it can't be reached (then it's tried on a later refresh).
+    /// </summary>
+    private async Task<string?> PlaceNameAsync(double latitude, double longitude, CancellationToken cancel)
+    {
+        var key = FormattableString.Invariant($"{latitude:0.##},{longitude:0.##}");
+        if (_settings.WeatherDevicePlaceKey == key && !string.IsNullOrEmpty(_settings.WeatherDevicePlace))
+            return _settings.WeatherDevicePlace;
+        try
+        {
+            var url = FormattableString.Invariant(
+                $"https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&lat={latitude:0.##}&lon={longitude:0.##}") +
+                $"&accept-language={Uri.EscapeDataString(CultureInfo.CurrentUICulture.Name)},en";
+            using var response = await Http.GetAsync(url, cancel);
+            response.EnsureSuccessStatusCode();
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(cancel));
+            if (!json.RootElement.TryGetProperty("address", out var address)) return null;
+            string? Part(string name) => address.TryGetProperty(name, out var v) && v.GetString() is { Length: > 0 } s ? s : null;
+            var name = Part("city") ?? Part("town") ?? Part("village") ?? Part("municipality") ?? Part("suburb")
+                       ?? Part("county") ?? Part("state_district") ?? Part("state") ?? Part("country");
+            if (name is null) return null;
+            _settings.WeatherDevicePlaceKey = key;
+            _settings.WeatherDevicePlace = name;
+            _settings.Save();
+            return name;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException
+                                   && !cancel.IsCancellationRequested)
+        {
+            return null; // offline or rate-limited: the forecast still works, with "My location"
+        }
     }
 
     /// <summary>City search for Settings (Open-Meteo geocoding).</summary>

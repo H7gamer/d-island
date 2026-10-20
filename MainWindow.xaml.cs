@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     private readonly StatusService _status = new();
     private System.Media.SoundPlayer? _alarmSound;
     private readonly ShelfService _shelf = new();
+    private readonly NotesService _notes = new();
     private readonly NotificationService _notifications = new();
     private readonly CalendarService _calendar;
     private readonly WeatherService _weather;
@@ -81,6 +82,8 @@ public partial class MainWindow : Window
     private readonly Spring _width = new(150);
     private readonly Spring _height = new(34);
     private readonly Spring _radius = new(17);
+    // 0 = Dynamic Island, 1 = notch: switching shape morphs between the two instead of jumping.
+    private readonly Spring _notch = new(0);
     private readonly Stopwatch _frameClock = Stopwatch.StartNew();
     private double _lastFrameTime;
     private double _lastAppliedFrame;
@@ -108,6 +111,7 @@ public partial class MainWindow : Window
     {
         StartupMark("window constructor");
         _settings = settings;
+        _notch.Reset(IsNotch ? 1 : 0);
         _weather = new WeatherService(settings);
         _calendar = new CalendarService(settings);
         _alarms = new AlarmService(settings);
@@ -160,6 +164,7 @@ public partial class MainWindow : Window
         _clipboard.Copied += OnCopied;
         _privacy.Changed += OnPrivacyChanged;
         _toggleHotkey.Pressed += () => SetIslandHidden(!IslandHidden);
+        _keyboard.ShortcutPressed += () => SetIslandHidden(!IslandHidden); // same shortcut, when another app owns it
         _weather.Changed += () =>
         {
             UpdateWeather();
@@ -198,6 +203,7 @@ public partial class MainWindow : Window
         WheelScrolling.Attach(NotificationsScroller, pixelsPerNotch: 36);
         WheelScrolling.Attach(CalendarScroller, pixelsPerNotch: 36);
         InitShelf();
+        InitNotes();
         InitEnergySaver();
         _stopwatch.Tick += OnStopwatchTick;
         _stopwatch.StateChanged += OnStopwatchStateChanged;
@@ -239,28 +245,72 @@ public partial class MainWindow : Window
     /// <summary>Hidden with the shortcut or the tray menu: nothing shows, alerts included.</summary>
     public bool IslandHidden { get; private set; }
 
+    // Hiding: the island shrinks into the top edge and fades; the window hides once the springs settle
+    // (OnRendering). Showing again mid-way just grows it back.
+    private bool _hideAnimating;
+
     public void SetIslandHidden(bool hidden)
     {
         if (hidden == IslandHidden) return;
-        IslandHidden = hidden;
         if (hidden)
         {
             _hoverTimer.Stop();
+            EndTyping(restoreFocus: true);
             SetExpanded(false);
             _state.DismissTransient();
-            _gpuBlur?.SetVisible(false);
-            Hide();
+            IslandHidden = true; // Render() is skipped from here on
+            Root.IsHitTestVisible = false;
             UpdateEqualizer(); // stops the bars' meter loop while nothing can be seen
+            if (!IsVisible)
+            {
+                FinishHide();
+                return;
+            }
+            _hideAnimating = true;
+            FadeRoot(0, 160);
+            AnimateTo(0, 0, 0);
         }
         else
         {
-            Show();
-            _gpuActive = false; // make UpdateGlass show the blur window again
-            UpdateGlass();
-            KeepOnTop(force: true);
+            IslandHidden = false;
+            if (_hideAnimating)
+            {
+                _hideAnimating = false; // still on screen: grow back from wherever it is
+            }
+            else
+            {
+                // Grow out of the top edge, like it went.
+                _width.Reset(0);
+                _height.Reset(0);
+                _radius.Reset(0);
+                ApplyGeometry();
+                Show();
+                _gpuActive = false; // make UpdateGlass show the blur window again
+                UpdateGlass();
+                KeepOnTop(force: true);
+            }
+            Root.IsHitTestVisible = true;
+            FadeRoot(1, 200);
             Render(); // whatever changed while hidden
             UpdateEqualizer();
         }
+    }
+
+    private void FinishHide()
+    {
+        _hideAnimating = false;
+        _gpuBlur?.SetVisible(false);
+        Hide();
+    }
+
+    private void FadeRoot(double opacity, double ms)
+    {
+        var fade = new DoubleAnimation(opacity, TimeSpan.FromMilliseconds(ms / SpeedFactor))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        Timeline.SetDesiredFrameRate(fade, FrameRateCap);
+        Root.BeginAnimation(OpacityProperty, fade);
     }
 
     /// <summary>(Re)registers the hide/show shortcut when its setting changes.</summary>
@@ -269,12 +319,34 @@ public partial class MainWindow : Window
         if (new WindowInteropHelper(this).Handle == IntPtr.Zero) return; // registered once the window exists
         if (_settings.ToggleHotkey == _toggleHotkeyText) return;
         _toggleHotkeyText = _settings.ToggleHotkey;
-        _settings.HotkeyProblem = _toggleHotkey.Set(_settings.ToggleHotkey);
+        var text = _settings.ToggleHotkey;
+        var problem = _toggleHotkey.Set(text);
+
+        // Another app registered the same combination first (RegisterHotKey is first come, first
+        // served; graphics, keyboard and overlay utilities often take Ctrl+Alt shortcuts). Recognise it
+        // from raw keyboard input instead, so it still works on those PCs.
+        _keyboard.Shortcut = _toggleHotkey.TakenByAnotherApp && Hotkey.TryParse(text, out var modifiers, out var key)
+            ? (modifiers, KeyInterop.VirtualKeyFromKey(key))
+            : null;
+        _keyboard.Update();
+        _settings.HotkeyProblem = _keyboard.Shortcut is not null
+            ? $"Another app also uses {text}. D-Island still responds to it, but that app may react too. Pick another shortcut to avoid that."
+            : problem;
     }
 
     private bool IsNotch => _settings.Mode == IslandMode.Notch;
     private bool IsGlass => _settings.Material == IslandMaterial.LiquidGlass;
-    private double PillTop => IsNotch ? 0 : IslandTopMargin;
+    /// <summary>How far the shape is between island (0) and notch (1), mid-morph after a shape change.</summary>
+    private double NotchAmount => Math.Clamp(_notch.Value, 0, 1);
+    private double PillTop => IslandTopMargin * MorphLower(NotchAmount);
+
+    // The island → notch morph, in three overlapping-free phases (reversed for notch → island):
+    // slide up to the screen edge, then square off the top corners, then flare the shoulders. The GPU
+    // blur's clip is a single rounded rectangle; squaring the corners only once the shape touches the
+    // edge lets that clip follow it exactly (its square top hangs above the window, out of sight).
+    private static double MorphLower(double t) => Math.Max(0, 1 - t / 0.4);
+    private static double MorphSquare(double t) => Math.Clamp((t - 0.4) / 0.3, 0, 1);
+    private static double MorphFlare(double t) => Math.Clamp((t - 0.7) / 0.3, 0, 1);
     private double SpeedFactor => Math.Clamp(_settings.AnimationSpeed, 0.25, 4);
     private double Scale => Math.Clamp(_settings.IslandScale, 0.5, 2);
     private double Roundness => Math.Clamp(_settings.CornerRoundness, 0, 1);
@@ -292,6 +364,11 @@ public partial class MainWindow : Window
             spring.Stiffness = stiffness;
             spring.Damping = damping;
         }
+        // The shape morph never bounces (critically damped): past either end it would just clamp.
+        _notch.Stiffness = stiffness;
+        _notch.Damping = 2 * Math.Sqrt(stiffness);
+        _notch.Target = IsNotch ? 1 : 0;
+        if (!IsLoaded || IslandHidden) _notch.Snap(); // nothing on screen to morph
 
         _hoverTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, _settings.HoverDelayMs));
         _volumeKeys.Enabled = _settings.HideVolumeFlyout;
@@ -301,7 +378,7 @@ public partial class MainWindow : Window
         UpdateWindowHeight();
         FontFamily = new FontFamily($"{_settings.FontFamily}, Segoe UI");
 
-        foreach (var view in _views) view.Margin = new Thickness(0, PillTop, 0, 0);
+        UpdateViewMargins();
 
         if (_settings.AdaptiveBackground) { if (IsLoaded) _background.Start(); }
         else _background.Stop();
@@ -398,6 +475,8 @@ public partial class MainWindow : Window
 #if DEBUG
         if (Environment.GetEnvironmentVariable("DISLAND_SNAPSHOT") is { Length: > 0 } snapshotPath)
             _ = SaveSnapshotAsync(snapshotPath);
+        if (Environment.GetEnvironmentVariable("DISLAND_ANIM_FRAMES") is { Length: > 0 } framesFolder)
+            _ = RecordAnimationFramesAsync(framesFolder);
         if (Environment.GetEnvironmentVariable("DISLAND_MOTION_TEST") is { Length: > 0 } motionTest)
         {
             // Debug aid: "artist|album|output.txt" → look up motion artwork and report the result.
@@ -498,10 +577,18 @@ public partial class MainWindow : Window
     {
         if (App.Updates is not { } updates) return;
 
-        // "D-Island updated" once, on the first start after an update.
+        // "D-Island updated" in the island and the What's New window, once, on the first start after an
+        // update (automatic, or a newer installer run by hand; not on a fresh install).
         var current = UpdateService.CurrentVersion;
-        if (Version.TryParse(_settings.LastRunVersion, out var last) && last < current)
+        var updatedFrom = Version.TryParse(_settings.LastRunVersion, out var last) && last < current ? last : null;
+#if DEBUG
+        // Debug aid: DISLAND_WHATSNEW=<version> shows it as if updated from that version.
+        if (Version.TryParse(Environment.GetEnvironmentVariable("DISLAND_WHATSNEW"), out var debugFrom)) updatedFrom = debugFrom;
+#endif
+        if (updatedFrom is not null)
         {
+            _ = Task.Delay(2500).ContinueWith(_ => (Application.Current as App)?.ShowWhatsNew(updatedFrom),
+                TaskScheduler.FromCurrentSynchronizationContext());
             _ = Task.Delay(3000).ContinueWith(_ => ShowInfo(TransientPriority.Calendar, 300, "", "D-Island updated",
                     $"Version {current}", detailBrush: (Brush)FindResource("Green"), seconds: 5),
                 TaskScheduler.FromCurrentSynchronizationContext());
@@ -593,13 +680,44 @@ public partial class MainWindow : Window
     {
         var delay = int.TryParse(Environment.GetEnvironmentVariable("DISLAND_SNAPSHOT_DELAY"), out var ms) ? ms : 3000;
         await Task.Delay(delay);
+        SaveSnapshot(path);
+    }
+
+    /// <summary>
+    /// Debug aid: DISLAND_ANIM_FRAMES=&lt;folder&gt; records the shape morph (island → notch → island) and
+    /// hide → show as PNG frames every 40 ms. The shape change is in memory only (not saved).
+    /// </summary>
+    private async Task RecordAnimationFramesAsync(string folder)
+    {
+        System.IO.Directory.CreateDirectory(folder);
+        await Task.Delay(3000);
+        async Task Record(string name, Action start)
+        {
+            start();
+            for (var i = 0; i < 14; i++)
+            {
+                SaveSnapshot(System.IO.Path.Combine(folder, $"{name}-{i:00}.png"));
+                await Task.Delay(40);
+            }
+            await Task.Delay(800);
+        }
+        var original = _settings.Mode;
+        var other = original == IslandMode.Notch ? IslandMode.DynamicIsland : IslandMode.Notch;
+        await Record("1-morph", () => { _settings.Mode = other; ApplySettings(); });
+        await Record("2-morph-back", () => { _settings.Mode = original; ApplySettings(); });
+        await Record("3-hide", () => SetIslandHidden(true));
+        await Record("4-show", () => SetIslandHidden(false));
+    }
+
+    private void SaveSnapshot(string path)
+    {
         var dpi = VisualTreeHelper.GetDpi(this);
         var bitmap = new RenderTargetBitmap((int)(Width * dpi.DpiScaleX), (int)(Height * dpi.DpiScaleY),
             dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
         bitmap.Render(Root);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        await using var file = System.IO.File.Create(path);
+        using var file = System.IO.File.Create(path);
         encoder.Save(file);
     }
 #endif
@@ -626,6 +744,7 @@ public partial class MainWindow : Window
         _alarmSound?.Stop();
         _notifications.Dispose();
         _calendar.Dispose();
+        _notes.Dispose(); // writes any unsaved typing
         _toggleHotkey.Dispose();
         _volume.Dispose();
         _brightness.Dispose();
@@ -725,6 +844,8 @@ public partial class MainWindow : Window
         Home,
         Notifications,
         Calendar,
+        Todo,
+        Notes,
         Shelf,
         Weather,
         Apps,
@@ -749,6 +870,8 @@ public partial class MainWindow : Window
         var pages = new List<ExpandedPage> { ExpandedPage.Home };
         if (_settings.NotificationsEnabled) pages.Add(ExpandedPage.Notifications);
         if (_settings.CalendarEnabled) pages.Add(ExpandedPage.Calendar);
+        if (_settings.TodoEnabled) pages.Add(ExpandedPage.Todo);
+        if (_settings.NotesEnabled) pages.Add(ExpandedPage.Notes);
         if (_settings.ShelfEnabled) pages.Add(ExpandedPage.Shelf);
         if (_settings.WeatherEnabled) pages.Add(ExpandedPage.Weather);
         pages.Add(ExpandedPage.Apps);
@@ -760,6 +883,8 @@ public partial class MainWindow : Window
     {
         ExpandedPage.Notifications => NotificationsPage,
         ExpandedPage.Calendar => CalendarPage,
+        ExpandedPage.Todo => TodoPage,
+        ExpandedPage.Notes => NotesPage,
         ExpandedPage.Shelf => ShelfPage,
         ExpandedPage.Weather => WeatherPage,
         ExpandedPage.Apps => AppsPage,
@@ -771,6 +896,8 @@ public partial class MainWindow : Window
     {
         ExpandedPage.Notifications => "",
         ExpandedPage.Calendar => "",
+        ExpandedPage.Todo => "", // checklist
+        ExpandedPage.Notes => "", // quick note
         ExpandedPage.Shelf => "",
         ExpandedPage.Weather => "",
         ExpandedPage.Apps => "",
@@ -782,6 +909,8 @@ public partial class MainWindow : Window
     {
         ExpandedPage.Notifications => "Notifications",
         ExpandedPage.Calendar => "Calendar",
+        ExpandedPage.Todo => "To-Do",
+        ExpandedPage.Notes => "Notes",
         ExpandedPage.Shelf => "Shelf",
         ExpandedPage.Weather => "Weather",
         ExpandedPage.Apps => "Apps",
@@ -865,6 +994,7 @@ public partial class MainWindow : Window
     private void ShowPage(ExpandedPage page, bool animate)
     {
         if (page == _page) return;
+        EndTyping(restoreFocus: true); // the text box being typed in is leaving the screen
         var pages = AvailablePages();
         var direction = pages.IndexOf(page) >= pages.IndexOf(_page) ? 1 : -1;
         var from = PageElement(_page);
@@ -1097,8 +1227,9 @@ public partial class MainWindow : Window
         _width.Step(dt);
         _height.Step(dt);
         _radius.Step(dt);
+        _notch.Step(dt);
 
-        var settled = _width.IsSettled && _height.IsSettled && _radius.IsSettled;
+        var settled = _width.IsSettled && _height.IsSettled && _radius.IsSettled && _notch.IsSettled;
         // Cap shape updates at 60 fps (30 under Energy Saver): on 120/144 Hz displays this halves the
         // window redraws while the motion looks the same at this size. (Physics still steps every tick.)
         if (!settled && now - _lastAppliedFrame < 1.0 / FrameRateCap - 0.002) return;
@@ -1109,6 +1240,7 @@ public partial class MainWindow : Window
             _width.Snap();
             _height.Snap();
             _radius.Snap();
+            _notch.Snap();
             CompositionTarget.Rendering -= OnRendering;
             _animating = false;
             UpdateWindowHeight();
@@ -1116,6 +1248,18 @@ public partial class MainWindow : Window
         }
 
         ApplyGeometry();
+        if (settled && _hideAnimating) FinishHide();
+    }
+
+    private double _viewsTop = double.NaN;
+
+    /// <summary>Views sit at the pill's top edge, which moves while the shape morphs (island ↔ notch).</summary>
+    private void UpdateViewMargins()
+    {
+        var top = PillTop;
+        if (Math.Abs(top - _viewsTop) < 0.01) return;
+        _viewsTop = top;
+        foreach (var view in _views) view.Margin = new Thickness(0, top, 0, 0);
     }
 
     private void ApplyGeometry()
@@ -1124,7 +1268,9 @@ public partial class MainWindow : Window
         var h = Math.Max(0, _height.Value);
         var r = Math.Clamp(_radius.Value, 0, Math.Min(w, h) / 2);
 
-        var shape = IsNotch ? BuildNotch(w, h, r) : BuildPill(w, h, r);
+        UpdateViewMargins();
+        var t = NotchAmount;
+        var shape = t <= 0 ? BuildPill(w, h, r) : BuildNotch(w, h, r, t);
         PillShape.Data = shape;
         GlassSheen.Data = shape;
         GlassLayer.Clip = shape;
@@ -1199,22 +1345,47 @@ public partial class MainWindow : Window
     /// <summary>
     /// Flush with the top edge: square top, rounded bottom corners, and small concave "shoulders"
     /// that flare into the screen edge so it reads as part of the bezel.
+    /// <para><paramref name="t"/> below 1 is mid-morph from the island (see <see cref="MorphLower"/>).</para>
     /// </summary>
-    private Geometry BuildNotch(double w, double h, double r)
+    private Geometry BuildNotch(double w, double h, double r, double t)
     {
         var x = (BaseWidth - w) / 2;
-        var s = Math.Min(NotchShoulder * Math.Max(Roundness, 0.25), h / 2);
+        var top = IslandTopMargin * MorphLower(t);
+        var bottom = top + h;
+        var topRadius = r * (1 - MorphSquare(t));
+        var s = Math.Min(NotchShoulder * Math.Max(Roundness, 0.25), h / 2) * MorphFlare(t);
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            ctx.BeginFigure(new Point(x - s, 0), isFilled: true, isClosed: true);
-            ctx.QuadraticBezierTo(new Point(x, 0), new Point(x, s), true, true);
-            ctx.LineTo(new Point(x, h - r), true, true);
-            ctx.ArcTo(new Point(x + r, h), new Size(r, r), 0, false, SweepDirection.Counterclockwise, true, true);
-            ctx.LineTo(new Point(x + w - r, h), true, true);
-            ctx.ArcTo(new Point(x + w, h - r), new Size(r, r), 0, false, SweepDirection.Counterclockwise, true, true);
-            ctx.LineTo(new Point(x + w, s), true, true);
-            ctx.QuadraticBezierTo(new Point(x + w, 0), new Point(x + w + s, 0), true, true);
+            if (s > 0)
+            {
+                ctx.BeginFigure(new Point(x - s, top), isFilled: true, isClosed: true);
+                ctx.QuadraticBezierTo(new Point(x, top), new Point(x, top + s), true, true);
+            }
+            else
+            {
+                ctx.BeginFigure(new Point(x, top + topRadius), isFilled: true, isClosed: true);
+            }
+            ctx.LineTo(new Point(x, bottom - r), true, true);
+            ctx.ArcTo(new Point(x + r, bottom), new Size(r, r), 0, false, SweepDirection.Counterclockwise, true, true);
+            ctx.LineTo(new Point(x + w - r, bottom), true, true);
+            ctx.ArcTo(new Point(x + w, bottom - r), new Size(r, r), 0, false, SweepDirection.Counterclockwise, true, true);
+            if (s > 0)
+            {
+                ctx.LineTo(new Point(x + w, top + s), true, true);
+                ctx.QuadraticBezierTo(new Point(x + w, top), new Point(x + w + s, top), true, true);
+            }
+            else
+            {
+                ctx.LineTo(new Point(x + w, top + topRadius), true, true);
+                if (topRadius > 0)
+                    ctx.ArcTo(new Point(x + w - topRadius, top), new Size(topRadius, topRadius), 0, false,
+                        SweepDirection.Counterclockwise, true, true);
+                ctx.LineTo(new Point(x + topRadius, top), true, true);
+                if (topRadius > 0)
+                    ctx.ArcTo(new Point(x, top + topRadius), new Size(topRadius, topRadius), 0, false,
+                        SweepDirection.Counterclockwise, true, true);
+            }
         }
         geometry.Freeze();
         return geometry;
@@ -1474,7 +1645,9 @@ public partial class MainWindow : Window
         var w = Math.Max(0, _width.Value);
         var h = Math.Max(0, _height.Value);
         var r = Math.Clamp(_radius.Value, 0, Math.Min(w, h) / 2);
-        var extra = IsNotch ? r : 0; // square top corners in notch mode
+        // Square top corners in notch mode: the clip extends above the window's top edge, where its
+        // rounded corners are cut off. Mid-morph this only happens once the shape touches the edge.
+        var extra = r * MorphSquare(NotchAmount);
         _gpuBlur.SetShape(
             (float)((BaseWidth - w) / 2 * f), (float)((PillTop - extra) * f),
             (float)(w * f), (float)((h + extra) * f), (float)(r * f),
@@ -1799,6 +1972,7 @@ public partial class MainWindow : Window
     private void SetExpanded(bool expanded)
     {
         _msOutside = 0;
+        if (!expanded) EndTyping(restoreFocus: true);
         if (expanded)
         {
             _leavePoll.Start();
@@ -1835,7 +2009,8 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnLeavePoll(object? sender, EventArgs e)
     {
-        if (IsCursorOverPill())
+        // Typing in a note: stay open wherever the mouse goes, until the user clicks elsewhere or presses Esc.
+        if (_typing || IsCursorOverPill())
         {
             _msOutside = 0;
             return;
@@ -1853,6 +2028,236 @@ public partial class MainWindow : Window
         var x = (BaseWidth - w) / 2;
         const double slop = 6;
         return p.X >= x - slop && p.X <= x + w + slop && p.Y >= 0 && p.Y <= PillTop + _height.Target + slop;
+    }
+
+    // ---------------------------------------------------------------- to-do and notes
+
+    private void InitNotes()
+    {
+        _notes.Changed += BuildTodoList;
+        NoteBox.Text = _notes.Note;
+        UpdateNoteStatus();
+        BuildTodoList();
+        Deactivated += (_, _) => EndTyping(restoreFocus: false); // clicked into another app
+    }
+
+    private void BuildTodoList()
+    {
+        TodoList.Children.Clear();
+        var secondary = (Brush)FindResource("Secondary");
+        var green = (Brush)FindResource("Green");
+        foreach (var item in _notes.Todos)
+        {
+            var id = item.Id;
+            var row = new Grid { Margin = new Thickness(0, 1, 0, 1), Background = Brushes.Transparent };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // Check circle: an outline when open, a filled green tick when done.
+            var check = new Button
+            {
+                Style = (Style)FindResource("IconButton"),
+                Width = 30,
+                Height = 30,
+                VerticalAlignment = VerticalAlignment.Top,
+                ToolTip = item.Done ? "Mark as not done" : "Mark as done",
+                Content = item.Done
+                    ? new Grid
+                    {
+                        Children =
+                        {
+                            new Ellipse { Width = 18, Height = 18, Fill = green },
+                            new TextBlock { Style = (Style)FindResource("Glyph"), Text = "", FontSize = 10, Foreground = Brushes.Black },
+                        },
+                    }
+                    : new Ellipse { Width = 18, Height = 18, Stroke = secondary, StrokeThickness = 1.5 },
+            };
+            var done = !item.Done;
+            check.Click += (_, _) => _notes.SetDone(id, done);
+            row.Children.Add(check);
+
+            var text = new TextBlock
+            {
+                Text = item.Text,
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(6, 6, 6, 6),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = item.Done ? secondary : Brushes.White,
+                TextDecorations = item.Done ? TextDecorations.Strikethrough : null,
+            };
+            Grid.SetColumn(text, 1);
+            row.Children.Add(text);
+
+            // Delete appears on hover, so the list stays calm.
+            var delete = new Button
+            {
+                Style = (Style)FindResource("IconButton"),
+                Width = 28,
+                Height = 28,
+                Opacity = 0,
+                VerticalAlignment = VerticalAlignment.Top,
+                ToolTip = "Delete",
+                Content = new TextBlock { Style = (Style)FindResource("Glyph"), Text = "", FontSize = 10, Foreground = secondary },
+            };
+            delete.Click += (_, _) => _notes.Remove(id);
+            row.MouseEnter += (_, _) => delete.Opacity = 1;
+            row.MouseLeave += (_, _) => delete.Opacity = 0;
+            Grid.SetColumn(delete, 2);
+            row.Children.Add(delete);
+            TodoList.Children.Add(row);
+        }
+
+        var open = _notes.OpenCount;
+        var finished = _notes.DoneCount;
+        TodoEmpty.Visibility = open == 0 && finished == 0 ? Visibility.Visible : Visibility.Collapsed;
+        TodoFooter.Visibility = open + finished > 0 ? Visibility.Visible : Visibility.Collapsed;
+        TodoCount.Text = open == 0 ? "All done" : finished == 0 ? $"{open} to do" : $"{open} to do · {finished} done";
+        TodoClearDone.Visibility = finished > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (IsLoaded && _state.IsExpanded && _page == ExpandedPage.Todo) Render(); // height may change
+    }
+
+    private void OnTodoInputKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            if (_notes.Add(TodoInput.Text))
+            {
+                TodoInput.Clear();
+                TodoScroller.ScrollToEnd(); // new tasks go to the end of the open ones
+            }
+        }
+        else if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            EndTyping(restoreFocus: true);
+        }
+    }
+
+    private void OnTodoInputChanged(object sender, TextChangedEventArgs e) =>
+        TodoPlaceholder.Visibility = TodoInput.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    private void OnTodoClearDoneClick(object sender, RoutedEventArgs e) => _notes.ClearDone();
+
+    private void OnNoteChanged(object sender, TextChangedEventArgs e)
+    {
+        _notes.Note = NoteBox.Text;
+        UpdateNoteStatus();
+    }
+
+    private void UpdateNoteStatus()
+    {
+        var length = NoteBox.Text.Length;
+        NotePlaceholder.Visibility = length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        NoteStatus.Text = length == 0 ? "Saved on this PC as you type" : $"{length:N0} characters · saved on this PC";
+        ResetNoteClear();
+    }
+
+    private void OnNoteKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape) return;
+        e.Handled = true;
+        EndTyping(restoreFocus: true);
+    }
+
+    private void OnNoteCopyClick(object sender, RoutedEventArgs e)
+    {
+        if (NoteBox.Text.Length == 0) return;
+        try { Clipboard.SetText(NoteBox.Text); }
+        catch (Exception) { return; /* clipboard busy */ }
+        ShowInfo(TransientPriority.Clipboard, 300, "", "Note copied", null, seconds: 1.5);
+    }
+
+    // Clearing asks for a second click ("Click again to clear") within 3 seconds.
+    private DispatcherTimer? _noteClearArm;
+
+    private void OnNoteClearClick(object sender, RoutedEventArgs e)
+    {
+        if (NoteBox.Text.Length == 0) return;
+        if (_noteClearArm is null)
+        {
+            NoteClearButton.Content = "Click again to clear";
+            _noteClearArm = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            _noteClearArm.Tick += (_, _) => ResetNoteClear();
+            _noteClearArm.Start();
+            return;
+        }
+        NoteBox.Clear(); // Ctrl+Z in the note brings it back while typing continues
+        _notes.Flush();
+        ResetNoteClear();
+    }
+
+    private void ResetNoteClear()
+    {
+        _noteClearArm?.Stop();
+        _noteClearArm = null;
+        NoteClearButton.Content = "Clear";
+    }
+
+    // Clicking a field's padding (not just the text box itself) starts typing too.
+    private void OnTodoFieldMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        BeginTyping(TodoInput);
+        e.Handled = true;
+    }
+
+    private void OnNoteFieldMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        BeginTyping(NoteBox);
+        NoteBox.CaretIndex = NoteBox.Text.Length;
+        e.Handled = true;
+    }
+
+    private void OnTypingBoxMouseDown(object sender, MouseButtonEventArgs e) => BeginTyping((TextBox)sender);
+
+    /// <summary>Clicks on these pages don't collapse the island (Root's click handler would).</summary>
+    private void OnTypingPageMouseUp(object sender, MouseButtonEventArgs e) => e.Handled = true;
+
+    private bool _typing;
+    private IntPtr _foregroundBeforeTyping;
+
+    /// <summary>
+    /// The island never takes the keyboard (WS_EX_NOACTIVATE), so clicking it doesn't pull focus from
+    /// the user's app. To type into a note it becomes a normal, activatable window while a text box is
+    /// in use, then gives the keyboard back to the app that had it (Esc, collapsing, hiding), or simply
+    /// lets go when the user clicks into another app.
+    /// </summary>
+    private void BeginTyping(TextBox box)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        if (!_typing)
+        {
+            _typing = true;
+            var foreground = NativeMethods.GetForegroundWindow();
+            _foregroundBeforeTyping = foreground == hwnd ? IntPtr.Zero : foreground;
+            NativeMethods.SetExStyle(hwnd, NativeMethods.GetExStyle(hwnd) & ~NativeMethods.WS_EX_NOACTIVATE);
+            _hoverTimer.Stop();
+        }
+        // Allowed: this process just received the mouse click (Windows' foreground rules).
+        NativeMethods.SetForegroundWindow(hwnd);
+        Activate();
+        box.Focus();
+        Keyboard.Focus(box);
+    }
+
+    private void EndTyping(bool restoreFocus)
+    {
+        if (!_typing) return;
+        _typing = false;
+        _notes.Flush();
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        FocusManager.SetFocusedElement(this, null);
+        Keyboard.ClearFocus();
+        NativeMethods.SetExStyle(hwnd, NativeMethods.GetExStyle(hwnd) | NativeMethods.WS_EX_NOACTIVATE);
+        if (restoreFocus && NativeMethods.GetForegroundWindow() == hwnd
+            && _foregroundBeforeTyping != IntPtr.Zero && NativeMethods.IsWindow(_foregroundBeforeTyping))
+            NativeMethods.SetForegroundWindow(_foregroundBeforeTyping);
+        _foregroundBeforeTyping = IntPtr.Zero;
+        KeepOnTop(); // activation can reorder the topmost band
     }
 
     // ---------------------------------------------------------------- clock
@@ -2047,6 +2452,7 @@ public partial class MainWindow : Window
     private void OnCopied(ClipboardEvent copy)
     {
         _lastCopy = copy;
+        if (_typing) return; // copying inside the island's own note: no alert over it
         var (glyph, detail) = copy.Kind switch
         {
             ClipboardKind.Files => ("", copy.Preview),
@@ -2057,10 +2463,12 @@ public partial class MainWindow : Window
         ShowInfo(TransientPriority.Clipboard, 340, glyph, "Copied", detail, seconds: Math.Min(_settings.AlertSeconds, 1.5));
     }
 
-    private void OnPasteShortcut() =>
-        ShowInfo(TransientPriority.Clipboard, 340, "", "Pasted",
+    private void OnPasteShortcut()
+    {
+        if (!_typing) ShowInfo(TransientPriority.Clipboard, 340, "", "Pasted",
             _lastCopy?.Kind == ClipboardKind.Image ? "Image" : _lastCopy?.Preview,
             seconds: Math.Min(_settings.AlertSeconds, 1.5));
+    }
 
     private void OnDeviceChanged(DeviceEvent device)
     {
@@ -2728,6 +3136,9 @@ public partial class MainWindow : Window
             ? $"Feels like {Degrees(report.FeelsLike)}"
             : $"H {Degrees(today.Max)}  L {Degrees(today.Min)}  ·  Feels like {Degrees(report.FeelsLike)}";
         WeatherPlaceText.Text = report.Place;
+        WeatherAttribution.Text = _settings.WeatherUseDeviceLocation && report.Place == _settings.WeatherDevicePlace
+            ? "Weather data by Open-Meteo.com · place © OpenStreetMap contributors"
+            : "Weather data by Open-Meteo.com";
 
         // Every second hour for the next 12: time, icon, temperature.
         WeatherHours.Children.Clear();

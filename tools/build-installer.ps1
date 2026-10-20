@@ -6,6 +6,12 @@
 #   1. Generates DIsland.ico (the black pill with a green dot, as in the tray) if it's missing.
 #   2. Publishes a self-contained Release build (no .NET install needed on the target PC).
 #   3. Compiles installer\DIsland.iss with Inno Setup 6 (winget install JRSoftware.InnoSetup).
+#   4. Writes the .sha256 file the in-app updater checks.
+#
+# Code signing (optional; removes the "unknown publisher" SmartScreen warning once the certificate has
+# reputation): set DISLAND_SIGN_PFX (path to a .pfx code-signing certificate) or DISLAND_SIGN_PFX_BASE64
+# (its contents, for CI secrets), plus DISLAND_SIGN_PASSWORD. The app, the setup and the uninstaller
+# are then signed and timestamped. Without them the build is unsigned, as before.
 #
 # Usage: .\tools\build-installer.ps1
 $ErrorActionPreference = 'Stop'
@@ -101,15 +107,59 @@ dotnet publish (Join-Path $root 'DIsland.csproj') -c Release -r win-x64 --self-c
     -p:PublishReadyToRun=false -p:DebugType=none -o $publish
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
 
+# ---- 2b. code signing (optional, see the top of this file)
+$pfx = $env:DISLAND_SIGN_PFX
+$tempPfx = $null
+if (-not $pfx -and $env:DISLAND_SIGN_PFX_BASE64) {
+    $tempPfx = Join-Path ([System.IO.Path]::GetTempPath()) "disland-sign-$PID.pfx"
+    [System.IO.File]::WriteAllBytes($tempPfx, [Convert]::FromBase64String($env:DISLAND_SIGN_PFX_BASE64))
+    $pfx = $tempPfx
+}
+$signArgs = $null
+if ($pfx) {
+    $signtool = @(Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue) +
+                @(Get-ChildItem "$env:LOCALAPPDATA\DIsland\Identity\*\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue) |
+                Sort-Object FullName -Descending | Select-Object -First 1
+    if (-not $signtool) { throw 'Signing was requested but signtool.exe (Windows SDK) was not found.' }
+    $signtool = $signtool.FullName
+    # Imported into the user's store for the build and signed by thumbprint, so the password never
+    # appears on a command line (Inno Setup echoes its sign command into the log).
+    $password = New-Object System.Security.SecureString
+    if ($env:DISLAND_SIGN_PASSWORD) { foreach ($c in $env:DISLAND_SIGN_PASSWORD.ToCharArray()) { $password.AppendChar($c) } }
+    $before = @(Get-ChildItem Cert:\CurrentUser\My | ForEach-Object Thumbprint)
+    $imported = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+    $cert = @($imported) | Where-Object HasPrivateKey | Select-Object -First 1
+    if (-not $cert) { throw 'The signing certificate has no private key.' }
+    $signArgs = @('sign', '/fd', 'sha256', '/tr', 'http://timestamp.digicert.com', '/td', 'sha256', '/sha1', $cert.Thumbprint, '/s', 'My')
+    Write-Host "Signing the app as $($cert.Subject)..."
+    & $signtool @signArgs (Join-Path $publish 'DIsland.exe') (Join-Path $publish 'DIsland.dll') | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "signtool failed ($LASTEXITCODE)" }
+}
+
 # ---- 3. installer
 $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
           "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw 'Inno Setup 6 not found: winget install JRSoftware.InnoSetup --scope user' }
 Write-Host 'Compiling the installer...'
-& $iscc "/DAppVersion=$version" "/DPublishDir=$publish" "/DIconFile=$ico" (Join-Path $root 'installer\DIsland.iss')
-if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
+$isccArgs = @("/DAppVersion=$version", "/DPublishDir=$publish", "/DIconFile=$ico")
+if ($signArgs) {
+    # Inno runs this for the setup and the uninstaller: $q is a quote, $f the (quoted) file to sign.
+    $tool = '$q' + $signtool + '$q ' + (($signArgs | ForEach-Object { if ($_ -match '\s') { '$q' + $_ + '$q' } else { $_ } }) -join ' ') + ' $f'
+    $isccArgs += @('/DSign', "/Sdisland=$tool")
+}
+& $iscc @isccArgs (Join-Path $root 'installer\DIsland.iss') | Out-Host
+$isccExit = $LASTEXITCODE
+if ($tempPfx) { Remove-Item $tempPfx -Force -ErrorAction SilentlyContinue }
+# Imported only for this build: remove it again, unless it was already in the store.
+if ($cert -and $before -notcontains $cert.Thumbprint) { Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -ErrorAction SilentlyContinue }
+if ($isccExit -ne 0) { throw "ISCC failed ($isccExit)" }
 # ---- 4. checksum file: the in-app updater only installs a release that has one, and verifies against it
 $setup = Join-Path $root "artifacts\D-Island-Setup-$version.exe"
+if ($signArgs) {
+    $signature = Get-AuthenticodeSignature $setup
+    if (-not $signature.SignerCertificate) { throw "The setup isn't signed ($($signature.Status))" }
+    Write-Host "Signed by $($signature.SignerCertificate.Subject)"
+}
 $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
 [System.IO.File]::WriteAllText("$setup.sha256", "$hash  D-Island-Setup-$version.exe`n")
 Write-Host ("Built {0} ({1:N1} MB), SHA-256 {2}" -f $setup, ((Get-Item $setup).Length / 1MB), $hash)

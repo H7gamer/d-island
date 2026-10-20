@@ -233,6 +233,10 @@ public sealed class AppSettings
     /// <summary>Microphone muted, Energy Saver, Wi-Fi / VPN connected or disconnected.</summary>
     public bool StatusAlerts { get; set; } = true;
 
+    // ---- notes and to-do
+    public bool TodoEnabled { get; set; } = true;
+    public bool NotesEnabled { get; set; } = true;
+
     // ---- file shelf
     public bool ShelfEnabled { get; set; } = true;
 
@@ -267,6 +271,10 @@ public sealed class AppSettings
     public bool WeatherUseDeviceLocation { get; set; } = true;
 
     public string? WeatherPlace { get; set; }
+
+    /// <summary>Town name for "My location" (from OpenStreetMap) and the rounded coordinates it's for.</summary>
+    public string? WeatherDevicePlace { get; set; }
+    public string? WeatherDevicePlaceKey { get; set; }
     public double? WeatherLatitude { get; set; }
     public double? WeatherLongitude { get; set; }
 

@@ -24,6 +24,26 @@
         <SolidColorBrush x:Key="Secondary" Color="#99FFFFFF" />
         <SolidColorBrush x:Key="ArtPlaceholder" Color="#FF2C2C2E" />
 
+        <!-- Text boxes on the To-Do and Notes pages: no chrome, the field behind them draws it. -->
+        <Style x:Key="IslandTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="CaretBrush" Value="White" />
+            <Setter Property="SelectionBrush" Value="#FF64D2FF" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost" Focusable="False" Background="Transparent"
+                                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Thin, rounded, translucent scroll bar for pages that can outgrow the island. -->
         <Style x:Key="SlimScrollThumb" TargetType="Thumb">
             <Setter Property="Template">
@@ -452,6 +472,67 @@
                                    HorizontalAlignment="Center" TextAlignment="Center" Foreground="{StaticResource Secondary}" />
                     </StackPanel>
 
+                    <!-- To-Do: add with Enter; rows are built in code (BuildTodoList). Clicks here never
+                         collapse the island (they'd lose what's being typed). -->
+                    <StackPanel x:Name="TodoPage" Background="Transparent" MouseLeftButtonUp="OnTypingPageMouseUp">
+                        <Border CornerRadius="12" Background="#1AFFFFFF" Height="36" Cursor="IBeam"
+                                MouseLeftButtonDown="OnTodoFieldMouseDown">
+                            <Grid Margin="12,0">
+                                <TextBlock Style="{StaticResource Glyph}" Text="&#xE710;" FontSize="12"
+                                           HorizontalAlignment="Left" Foreground="{StaticResource Secondary}" />
+                                <TextBlock x:Name="TodoPlaceholder" Text="Add a task" FontSize="13" Margin="24,0,0,0"
+                                           VerticalAlignment="Center" IsHitTestVisible="False"
+                                           Foreground="{StaticResource Secondary}" />
+                                <TextBox x:Name="TodoInput" Style="{StaticResource IslandTextBox}" Margin="24,0,0,0"
+                                         VerticalAlignment="Center" MaxLength="300"
+                                         PreviewMouseLeftButtonDown="OnTypingBoxMouseDown"
+                                         PreviewKeyDown="OnTodoInputKeyDown" TextChanged="OnTodoInputChanged" />
+                            </Grid>
+                        </Border>
+                        <ScrollViewer x:Name="TodoScroller" Style="{StaticResource SlimScroll}" MaxHeight="200" Margin="0,8,0,0">
+                            <StackPanel x:Name="TodoList" />
+                        </ScrollViewer>
+                        <StackPanel x:Name="TodoEmpty" Margin="0,14,0,10">
+                            <TextBlock Style="{StaticResource Glyph}" Text="&#xE73E;" FontSize="20"
+                                       Foreground="{StaticResource Green}" />
+                            <TextBlock Text="All done" FontSize="13" FontWeight="SemiBold" Margin="0,8,0,0"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock Text="Type a task above and press Enter" FontSize="11" Margin="0,2,0,0"
+                                       HorizontalAlignment="Center" Foreground="{StaticResource Secondary}" />
+                        </StackPanel>
+                        <Grid x:Name="TodoFooter" Margin="0,6,0,0">
+                            <TextBlock x:Name="TodoCount" FontSize="12" VerticalAlignment="Center"
+                                       Foreground="{StaticResource Secondary}" />
+                            <Button x:Name="TodoClearDone" Style="{StaticResource ChipButton}" Content="Clear completed"
+                                    HorizontalAlignment="Right" Click="OnTodoClearDoneClick" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Notes: one scratch pad, saved as you type (NotesService). -->
+                    <StackPanel x:Name="NotesPage" Background="Transparent" MouseLeftButtonUp="OnTypingPageMouseUp">
+                        <Border CornerRadius="14" Background="#14FFFFFF" Padding="12,10" Height="168" Cursor="IBeam"
+                                MouseLeftButtonDown="OnNoteFieldMouseDown">
+                            <Grid>
+                                <TextBlock x:Name="NotePlaceholder" Text="Jot something down…" FontSize="13"
+                                           IsHitTestVisible="False" Foreground="{StaticResource Secondary}" />
+                                <TextBox x:Name="NoteBox" Style="{StaticResource IslandTextBox}" AcceptsReturn="True"
+                                         AcceptsTab="True" TextWrapping="Wrap" MaxLength="20000"
+                                         PreviewMouseLeftButtonDown="OnTypingBoxMouseDown"
+                                         PreviewKeyDown="OnNoteKeyDown" TextChanged="OnNoteChanged" />
+                            </Grid>
+                        </Border>
+                        <Grid Margin="0,6,0,0">
+                            <TextBlock x:Name="NoteStatus" FontSize="11" VerticalAlignment="Center"
+                                       Foreground="{StaticResource Secondary}" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Style="{StaticResource ChipButton}" Content="Copy" Click="OnNoteCopyClick"
+                                        ToolTip="Copy the note to the clipboard" />
+                                <Button x:Name="NoteClearButton" Style="{StaticResource ChipButton}" Content="Clear"
+                                        Click="OnNoteClearClick" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
                     <!-- File shelf: files dropped on the island; tiles are built in code (BuildShelf).
                          Drag a tile (or "Drag all") out to drop the files anywhere. -->
                     <Grid x:Name="ShelfPage">
@@ -517,8 +598,9 @@
                         <StackPanel x:Name="WeatherDays" />
                         <TextBlock x:Name="WeatherProblemText" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
                                    Foreground="{StaticResource Secondary}" Visibility="Collapsed" />
-                        <!-- Required attribution: Open-Meteo data is licensed CC BY 4.0. -->
-                        <TextBlock Text="Weather data by Open-Meteo.com" FontSize="10" Margin="0,6,0,0"
+                        <!-- Required attribution: Open-Meteo data is licensed CC BY 4.0; place names from
+                             OpenStreetMap (ODbL) when "My location" is used (UpdateWeather). -->
+                        <TextBlock x:Name="WeatherAttribution" Text="Weather data by Open-Meteo.com" FontSize="10" Margin="0,6,0,0"
                                    HorizontalAlignment="Right" Foreground="{StaticResource Secondary}" Opacity="0.7" />
                     </StackPanel>
 

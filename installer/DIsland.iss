@@ -58,6 +58,12 @@ SolidCompression=yes
 InfoBeforeFile=HowToUse.rtf
 ; The running island is closed in PrepareToInstall / InitializeUninstall below.
 CloseApplications=no
+#ifdef Sign
+; Code signing (tools\build-installer.ps1 passes /DSign and the "disland" sign tool when a certificate
+; is configured): signs the setup and the uninstaller.
+SignTool=disland
+SignedUninstaller=yes
+#endif
 
 [Messages]
 WizardLicense=License agreement
@@ -154,7 +160,7 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if (CurUninstallStep = usPostUninstall) and not UninstallSilent then
-    if MsgBox('Also delete your D-Island settings and saved data (shelf, cached artwork)?', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+    if MsgBox('Also delete your D-Island settings and saved data (to-do list, notes, shelf, cached artwork)?', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
     begin
       DelTree(ExpandConstant('{userappdata}\DIsland'), True, True, True);
       DelTree(ExpandConstant('{localappdata}\DIsland'), True, True, True);

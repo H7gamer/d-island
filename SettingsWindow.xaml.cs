@@ -165,7 +165,8 @@ public partial class SettingsWindow : Window
         var pages = Section("EXPANDED ISLAND");
         Choice(pages, "Navigation", new[] { (PageNavigation.Tabs, "Tabs"), (PageNavigation.Dots, "Page dots") },
             () => s.PageNavigation, v => s.PageNavigation = v);
-        Note(pages, "The expanded island has pages: Home, Apps, and Wallpaper when Wallpaper Engine is running. " +
+        Note(pages, "The expanded island has pages: Home, Notifications, Calendar, To-Do, Notes, Shelf, Weather, Apps, " +
+                    "and Wallpaper when Wallpaper Engine is running. Turn pages on or off in their sections below. " +
                     "Click a tab or dot, or scroll the mouse wheel over the island to switch.");
         Check(pages, "Show when an app is using the microphone or camera", () => s.PrivacyIndicator, v => s.PrivacyIndicator = v);
 
@@ -182,6 +183,12 @@ public partial class SettingsWindow : Window
         IcsLinks(calendar);
         Choice(calendar, "Remind me", new[] { (0, "Off"), (1, "1 min"), (5, "5 min"), (10, "10 min"), (15, "15 min") },
             () => s.CalendarReminderMinutes, v => s.CalendarReminderMinutes = v);
+
+        var notes = Section("TO-DO & NOTES", navLabel: "To-Do & Notes");
+        Check(notes, "Show the To-Do page", () => s.TodoEnabled, v => s.TodoEnabled = v);
+        Check(notes, "Show the Notes page", () => s.NotesEnabled, v => s.NotesEnabled = v);
+        Note(notes, "Click a text box in the island to type; press Esc or click anywhere else to give the keyboard " +
+                    "back. Tasks and notes are saved only on this PC, as you type.");
 
         var shelf = Section("FILE SHELF");
         Check(shelf, "Show the Shelf page (drag files onto the island to keep them)", () => s.ShelfEnabled, v => s.ShelfEnabled = v);
@@ -200,7 +207,7 @@ public partial class SettingsWindow : Window
             (TemperatureUnit.Fahrenheit, "°F"),
         }, () => s.TemperatureUnit, v => s.TemperatureUnit = v);
         Check(weather, "Show the weather next to the clock", () => s.WeatherInIdlePill, v => s.WeatherInIdlePill = v);
-        Note(weather, "Forecasts from Open-Meteo (free, no account). \"My location\" uses Windows location, rounded to " +
+        Note(weather, "Forecasts from Open-Meteo (free, no account), and your town's name from OpenStreetMap. \"My location\" uses Windows location, rounded to " +
                       "about 1 km before it's sent.");
 
         var quickApps = Section("QUICK APPS");
@@ -331,8 +338,10 @@ public partial class SettingsWindow : Window
         var status = new TextBlock { Foreground = Secondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 6) };
         var check = new Button { Style = (Style)FindResource("ChipButton"), Content = "Check for updates", Margin = new Thickness(0, 0, 8, 0) };
         var install = new Button { Style = (Style)FindResource("ChipButton"), Content = "Install now", Margin = new Thickness(0, 0, 8, 0) };
-        var open = new Button { Style = (Style)FindResource("ChipButton"), Content = "Release notes" };
-        var row = new WrapPanel { Margin = new Thickness(0, 0, 0, 4), Children = { check, install, open } };
+        var open = new Button { Style = (Style)FindResource("ChipButton"), Content = "Release notes", Margin = new Thickness(0, 0, 8, 0) };
+        var whatsNew = new Button { Style = (Style)FindResource("ChipButton"), Content = "What's new", Margin = new Thickness(0) };
+        whatsNew.Click += (_, _) => (Application.Current as App)?.ShowWhatsNew(null);
+        var row = new WrapPanel { Margin = new Thickness(0, 0, 0, 4), Children = { check, install, open, whatsNew } };
         panel.Children.Add(status);
         panel.Children.Add(row);
 

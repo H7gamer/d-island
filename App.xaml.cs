@@ -109,6 +109,23 @@ public partial class App : Application
         BringToFront(_settingsWindow);
     }
 
+    private WhatsNewWindow? _whatsNewWindow;
+
+    /// <summary>
+    /// What's new since <paramref name="updatedFrom"/> (after an update), or in this version (from
+    /// Settings, null). Nothing to show (a version without notes) shows nothing.
+    /// </summary>
+    public void ShowWhatsNew(Version? updatedFrom)
+    {
+        var releases = WhatsNew.Since(updatedFrom);
+        if (releases.Count == 0) releases = WhatsNew.Since(null).Take(1).ToList();
+        if (releases.Count == 0) return;
+        _whatsNewWindow?.Close();
+        _whatsNewWindow = new WhatsNewWindow(releases, updatedFrom);
+        _whatsNewWindow.Closed += (_, _) => _whatsNewWindow = null;
+        BringToFront(_whatsNewWindow);
+    }
+
     /// <summary>
     /// Activate() alone is ignored by Windows' foreground lock when we're a background app, which
     /// leaves the window buried behind whatever is maximized. A brief Topmost toggle always raises it.
@@ -146,6 +163,7 @@ public partial class App : Application
         _openSettingsWait?.Unregister(null);
         _openSettingsSignal?.Dispose();
         _settingsWindow?.Close();
+        _whatsNewWindow?.Close();
         _tray?.Dispose();
         _window?.Close();
         _singleInstance?.ReleaseMutex();

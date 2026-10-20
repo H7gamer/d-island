@@ -1,7 +1,7 @@
 # D-Island
 
 A Dynamic Island–style overlay for Windows 10/11 (WPF, .NET 8): music, timers, notifications,
-calendar, weather, a file shelf and system alerts in a pill at the top of your screen.
+calendar, weather, a to-do list, notes, a file shelf and system alerts in a pill at the top of your screen.
 
 Built by h7 · [ibuildrigs.com](https://ibuildrigs.com) · Licensed under the [D-Island License](LICENSE.txt)
 
@@ -55,6 +55,11 @@ before installing (also in the Start menu afterwards). Options: start with Windo
 shortcut, and the one-time notifications / Windows calendar setup. Uninstall from Settings > Apps;
 it also removes the identity package and asks whether to delete your settings.
 
+**"Windows protected your PC"?** The installer isn't code-signed yet, so Microsoft Defender SmartScreen
+doesn't recognise it. Check its SHA-256 against the one on the release page, then click **More info** >
+**Run anyway**. This only happens on the first install: D-Island's own updater installs new versions
+without it. After an update, a What's New window lists the changes.
+
 To build the installer: `.\tools\build-installer.ps1` (needs Inno Setup 6:
 `winget install JRSoftware.InnoSetup --scope user`). Output: `artifacts\D-Island-Setup-<version>.exe`.
 
@@ -67,12 +72,12 @@ dotnet run
 
 Double-click the tray icon, or right-click it and choose **Settings…**, to open the settings window. Changes apply live.
 The tray menu also has **Hide island**, **Hide Windows volume flyout**, **Start with Windows** and **Exit**.
-**Ctrl+Alt+I** hides and shows the island from anywhere (change it in Settings > System).
+**Ctrl+Alt+I** hides and shows the island from anywhere (change it in Settings > System). If another app already registered the same shortcut, D-Island still recognises it from raw keyboard input and says so in Settings.
 
 ## Shape and material
 
 - **Shape:** Dynamic Island (default) is a floating pill just below the top edge. Notch is attached to
-  the top edge with flared shoulders, like a laptop notch.
+  the top edge with flared shoulders, like a laptop notch. Switching morphs one into the other.
 - **Material:**
   - **Opaque** (default): a solid background.
   - **Translucent:** a see-through background with adjustable opacity.
@@ -174,6 +179,8 @@ again in the same direction to move to the next page.
 | Home | Now playing (artwork, progress, controls) or a large clock; timer presets / the running timer |
 | Notifications | Other apps' notifications, newest first. Click one to open its app, ✕ to dismiss it, or Clear all |
 | Calendar | This month's dates (today highlighted, dots on busy days; click a day to list it) and the next 7 days, with "in 12 min", "Now" and **Join** for Teams / Zoom / Meet / Webex |
+| To-Do | Quick tasks: type and press Enter to add, tick to finish, Clear completed. Saved on this PC |
+| Notes | A scratch pad that saves as you type (Copy, Clear). Click to type; Esc or a click elsewhere gives the keyboard back |
 | Shelf | Files dragged onto the island, kept until you drag them out somewhere else. The shelf stores links, not copies |
 | Weather | Now, the next 12 hours and 5 days, from Open-Meteo (free, no account), for Windows' location or a chosen city |
 | Apps | Up to 16 quick-launch apps picked from the Start menu |
@@ -251,6 +258,7 @@ Settings are stored in `%AppData%\DIsland\settings.json` and can be edited in th
 | | Notification alert duration | 5 s |
 | Calendar | Calendar page / Windows calendars / reminder | on / on / 5 min |
 | | iCal links | none |
+| To-Do & Notes | To-Do page / Notes page | on / on |
 | File shelf | Shelf page / keep files after dragging out | on / off |
 | Weather | Weather page / location / units | on / My location / Auto |
 | | Weather next to the clock | on |
@@ -335,6 +343,8 @@ state.
 - `Services/NotificationService.cs`, `CalendarService.cs`, `PackageIdentity.cs` and `Identity/`: notifications, calendar and the sparse-package setup.
 - `Services/WeatherService.cs` and `WeatherIcons.cs`: Open-Meteo weather and the drawn weather icons.
 - `Services/ShelfService.cs`, `QuickAppsService.cs`: the file shelf; Start menu apps, icons and thumbnails.
+- `Services/NotesService.cs`: the to-do list and notes (`%LocalAppData%\DIsland\notes.json`).
+- `Services/UpdateService.cs`, `WhatsNewWindow.cs`: the updater and the What's New window shown after updates.
 - `Services/DeviceService.cs`, `PrivacyService.cs`, `KeyboardWatcher.cs`, `FocusService.cs`, `ClipboardWatcher.cs`: alert sources.
 - `Services/Hotkey.cs`, `WheelScrolling.cs`: the hide/show shortcut; proportional wheel scrolling.
 - `Services/`: also media, volume, brightness, battery, timer, the volume-key hook, settings and startup registration.

@@ -40,4 +40,11 @@ public sealed class Spring
         Value = Target;
         Velocity = 0;
     }
+
+    /// <summary>Jumps to <paramref name="value"/> at rest (target included).</summary>
+    public void Reset(double value)
+    {
+        Value = Target = value;
+        Velocity = 0;
+    }
 }

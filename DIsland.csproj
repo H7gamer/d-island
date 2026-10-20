@@ -13,7 +13,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>DIsland.ico</ApplicationIcon>
     <Product>D-Island</Product>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Description>A Dynamic Island for Windows</Description>
     <Authors>h7</Authors>
     <Company>ibuildrigs</Company>

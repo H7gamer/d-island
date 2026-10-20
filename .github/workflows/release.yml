@@ -59,8 +59,13 @@ jobs:
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
 
       # Windows PowerShell (not pwsh): the script draws the icon and wizard art with System.Drawing.
+      # Signed when the repository has the SIGN_PFX_BASE64 / SIGN_PFX_PASSWORD secrets (a code-signing
+      # certificate, base64-encoded); unsigned otherwise.
       - name: Build the installer
         shell: powershell
+        env:
+          DISLAND_SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+          DISLAND_SIGN_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
         run: .\tools\build-installer.ps1
 
       # pwsh: in Windows PowerShell, `gh release view`'s "not found" on stderr becomes a

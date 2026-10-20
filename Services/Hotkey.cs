@@ -24,6 +24,9 @@ public sealed class Hotkey : IDisposable
 
     public event Action? Pressed;
 
+    /// <summary>The last <see cref="Set"/> failed because another app already registered the combination.</summary>
+    public bool TakenByAnotherApp { get; private set; }
+
     public void Attach(HwndSource source)
     {
         _source = source;
@@ -34,10 +37,12 @@ public sealed class Hotkey : IDisposable
     public string? Set(string? text)
     {
         Unregister();
+        TakenByAnotherApp = false;
         if (_source is null || string.IsNullOrWhiteSpace(text)) return null;
         if (!TryParse(text, out var modifiers, out var key)) return $"\"{text}\" isn't a valid shortcut.";
         var vk = (uint)KeyInterop.VirtualKeyFromKey(key);
         _registered = RegisterHotKey(_source.Handle, _id, ToNative(modifiers) | MOD_NOREPEAT, vk);
+        TakenByAnotherApp = !_registered;
         return _registered ? null : $"{text} is already used by another app. Pick another shortcut.";
     }
 

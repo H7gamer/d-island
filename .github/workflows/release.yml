@@ -63,8 +63,10 @@ jobs:
         shell: powershell
         run: .\tools\build-installer.ps1
 
+      # pwsh: in Windows PowerShell, `gh release view`'s "not found" on stderr becomes a
+      # terminating error under the runner's ErrorActionPreference=Stop.
       - name: Publish the release
-        shell: powershell
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -72,8 +74,11 @@ jobs:
           $hash = (Get-FileHash $setup -Algorithm SHA256).Hash
           $notes = (Get-Content "$env:RUNNER_TEMP\release-notes.md" -Raw -Encoding utf8).Replace('{VERSION}', $env:VERSION).Replace('{SHA256}', $hash)
           [System.IO.File]::WriteAllText("$env:RUNNER_TEMP\notes.md", $notes)
-          gh release view $env:TAG *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $ErrorActionPreference = 'Continue'
+          gh release view $env:TAG 2>&1 | Out-Null
+          $exists = $LASTEXITCODE -eq 0
+          $ErrorActionPreference = 'Stop'
+          if ($exists) {
             gh release upload $env:TAG $setup "$setup.sha256" --clobber
             gh release edit $env:TAG --notes-file "$env:RUNNER_TEMP\notes.md" --draft=false --latest
           } else {
